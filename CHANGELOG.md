@@ -2,6 +2,12 @@
 
 All notable changes to PR Pulse are documented in this file.
 
+## [2.3.0] – 2026-11-20
+
+- **Merge conflicts on PR cards**: PR cards now show merge conflicts, with a filter to list only conflicting PRs and a count of commits behind for each card.
+- **First sync feedback**: The first sync shows as it loads instead of blocking setup, and the dashboard no longer appears empty while the initial fetch runs.
+- **Bug fixes**: Bot approvals and pending team reviews no longer mark a PR as approved, notifications no longer fire for the fetch at browser start, update, or reconnect, self-hosted Jira instances keep their context path in the base URL, and the GitHub search page size shrinks when GraphQL times out.
+
 ## [2.2.0] – 2026-08-26
 
 - **Desktop notifications**: PR Pulse now tells you when something changes between polls — a review requested of you, an approval or requested changes on your PR, CI failing or recovering, and PRs that are no longer open. Several changes of the same kind in one refresh collapse into a single line rather than a stack. Clicking a notification opens the relevant PR (or the deep link to the first unresolved thread, when changes were requested).
