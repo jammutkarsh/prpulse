@@ -32,6 +32,14 @@ export function activeSync(status: SyncStatus | undefined, now = Date.now()): Sy
 	return status?.inProgress && now - (status.updatedAt ?? status.startedAt) < STALE_SYNC_MS ? status : null;
 }
 
+/** The onboarding badge's text: a sync that stopped short must not read as finished. */
+export function onboardingSyncLabel(syncing: boolean, complete: boolean, count: number): string | null {
+	const noun = `PR${count !== 1 ? 's' : ''}`;
+	if (syncing) return `Syncing… ${count} ${noun} so far`;
+	if (count === 0) return null;
+	return complete ? `Synced ${count} ${noun}` : `Loaded ${count} ${noun}, sync didn't finish`;
+}
+
 export interface PopupState {
 	loading: boolean;
 	setupRequired: boolean;
@@ -133,7 +141,8 @@ export function createPopupSession({
 			return;
 		}
 
-		viewedPrIds = new Set(idsOf(data.pullRequests));
+		// A partial first-sync list is no baseline; once the sync completes everything would read as new.
+		viewedPrIds = new Set(data.pullRequests.lastFetched === null ? [] : idsOf(data.pullRequests));
 
 		// Restoring is the only thing `persistFilters` gates. Starting fresh still writes those fresh
 		// filters, so what the badge is computed from matches what the popup is showing.
@@ -194,7 +203,9 @@ export function createPopupSession({
 
 	/** A fresh write from the worker: whatever was not on screen when the popup opened counts as new. */
 	function applyPullRequests(pullRequests: PullRequestData): void {
-		const newPrCount = viewedPrIds.size > 0 ? idsOf(pullRequests).filter((id) => !viewedPrIds.has(id)).length : 0;
+		// A partial first-sync list has no baseline: everything past page one would read as new.
+		const newPrCount =
+			viewedPrIds.size > 0 && pullRequests.lastFetched !== null ? idsOf(pullRequests).filter((id) => !viewedPrIds.has(id)).length : 0;
 		set({ pullRequests, newPrCount });
 	}
 

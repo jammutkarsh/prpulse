@@ -8,6 +8,7 @@ import type {
 	PullRequestReviewer,
 	PullRequestReviews,
 	ProviderConfig,
+	SyncProgressListener,
 	User,
 } from '../types';
 
@@ -162,7 +163,9 @@ export function buildBehindQuery(targets: BehindTarget[]): { query: string; vari
 	targets.forEach((target, i) => {
 		Object.assign(variables, { [`o${i}`]: target.owner, [`n${i}`]: target.name, [`b${i}`]: target.base, [`h${i}`]: target.headOid });
 		declarations.push(`$o${i}: String!, $n${i}: String!, $b${i}: String!, $h${i}: String!`);
-		fields.push(`p${i}: repository(owner: $o${i}, name: $n${i}) { ref(qualifiedName: $b${i}) { compare(headRef: $h${i}) { behindBy } } }`);
+		fields.push(
+			`p${i}: repository(owner: $o${i}, name: $n${i}) { ref(qualifiedName: $b${i}) { compare(headRef: $h${i}) { behindBy } } }`,
+		);
 	});
 
 	return { query: `query(${declarations.join(', ')}) {\n\trateLimit { cost remaining }\n\t${fields.join('\n\t')}\n}`, variables };
@@ -352,6 +355,20 @@ export function buildReviews(pr: GraphQLPullRequest): PullRequestReviews {
 		changesRequestedReviewId,
 		firstUnresolvedThreadUrl: unresolvedThreadUrl,
 	};
+}
+
+/** Already-reviewed PRs belong in the same list as pending review requests, minus the overlap. */
+function combineViews(myPRs: PullRequest[], reviewRequests: PullRequest[], reviewedPRs: PullRequest[]): PrSourceResult {
+	const seen = new Set(reviewRequests.map((pr) => pr.id));
+	const merged = [...reviewRequests];
+	for (const pr of reviewedPRs) {
+		if (!seen.has(pr.id)) {
+			seen.add(pr.id);
+			merged.push(pr);
+		}
+	}
+
+	return { myPRs, reviewRequests: merged };
 }
 
 export class GitHubProvider implements PrSource {
@@ -551,7 +568,12 @@ export class GitHubProvider implements PrSource {
 		);
 	}
 
-	async #fetchView(view: SearchView, issueCount: number, behindTargets: Map<string, BehindTarget>): Promise<PullRequest[]> {
+	async #fetchView(
+		view: SearchView,
+		issueCount: number,
+		behindTargets: Map<string, BehindTarget>,
+		onPage?: (sofar: PullRequest[]) => void,
+	): Promise<PullRequest[]> {
 		const pullRequests: PullRequest[] = [];
 		let cursor: string | null = null;
 		let dropped = 0;
@@ -593,6 +615,8 @@ export class GitHubProvider implements PrSource {
 				pullRequests.push(this.#transformPullRequest(node));
 			}
 
+			onPage?.([...pullRequests]);
+
 			// issueCount is a snapshot from the probe, so hasNextPage — not the count — ends the loop.
 			// A PR opened between the probe and this request still gets picked up.
 			// The PR cap only bounds the loop while pages make progress; an empty page that still claims a
@@ -613,32 +637,38 @@ export class GitHubProvider implements PrSource {
 		return pullRequests;
 	}
 
-	async getAllPullRequests(): Promise<PrSourceResult> {
+	async getAllPullRequests(onProgress?: SyncProgressListener): Promise<PrSourceResult> {
 		const counts = await this.#graphql<CountResponse>(COUNT_QUERY, SEARCH_QUERIES);
 		this.#logCost('count probe', counts.rateLimit);
 
 		const behindTargets = new Map<string, BehindTarget>();
+		const views = ['myPRs', 'reviewRequests', 'reviewedPRs'] as const;
+		// The views page in parallel; this holds each one's latest snapshot so every page can report the
+		// whole picture, not just its own view. The total overcounts PRs that are both requested and
+		// already reviewed, which only means the bar finishes a little short of it.
+		const sofar: Record<SearchView, PullRequest[]> = { myPRs: [], reviewRequests: [], reviewedPRs: [] };
+		const total = views.reduce((sum, view) => sum + Math.min(counts[view]?.issueCount ?? 0, MAX_PRS_PER_VIEW), 0);
+		const report = () => {
+			const partial = combineViews(sofar.myPRs, sofar.reviewRequests, sofar.reviewedPRs);
+			onProgress?.(partial, { loaded: partial.myPRs.length + partial.reviewRequests.length, total });
+		};
+
 		const [myPRs, reviewRequests, reviewedPRs] = await Promise.all(
-			(['myPRs', 'reviewRequests', 'reviewedPRs'] as const).map((view) => {
+			views.map((view) => {
 				const issueCount = counts[view]?.issueCount ?? 0;
 				// Nothing to fetch: skip the request entirely rather than paying for an empty page.
-				return issueCount === 0 ? Promise.resolve([]) : this.#fetchView(view, issueCount, behindTargets);
+				return issueCount === 0
+					? Promise.resolve([])
+					: this.#fetchView(view, issueCount, behindTargets, (pullRequests) => {
+							sofar[view] = pullRequests;
+							report();
+						});
 			}),
 		);
 
-		// Already-reviewed PRs belong in the same list as pending review requests, minus the overlap.
-		const seen = new Set(reviewRequests.map((pr) => pr.id));
-		const merged = [...reviewRequests];
-		for (const pr of reviewedPRs) {
-			if (!seen.has(pr.id)) {
-				seen.add(pr.id);
-				merged.push(pr);
-			}
-		}
-
-		await this.#attachBehindCounts([myPRs, merged], behindTargets);
-
-		return { myPRs, reviewRequests: merged };
+		const result = combineViews(myPRs, reviewRequests, reviewedPRs);
+		await this.#attachBehindCounts([result.myPRs, result.reviewRequests], behindTargets);
+		return result;
 	}
 
 	async getStates(ids: string[]): Promise<Map<string, string>> {

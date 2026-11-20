@@ -45,7 +45,7 @@
 			<RefreshCw class="h-8 w-8 animate-spin" />
 		</div>
 		<h2 class="text-lg font-semibold">Fetching pull requests</h2>
-		<p class="max-w-sm desc">They will show up here once the first fetch finishes.</p>
+		<p class="max-w-sm desc">They will show up here as they arrive.</p>
 	</div>
 {:else}
 	<div class="state-shell">

@@ -218,8 +218,9 @@
 	let currentItems = $derived(currentTab === 'myPRs' ? prData.myPRs || [] : prData.reviewRequests || []);
 	let myPrCount = $derived(prData.myPRs?.length || 0);
 	let reviewCount = $derived(prData.reviewRequests?.length || 0);
+	let syncText = $derived(sync && sync.total > 0 ? `Syncing… ${Math.min(sync.loaded, sync.total)} of ${sync.total} PRs` : 'Syncing…');
 	let lastUpdatedText = $derived(
-		syncing ? 'Syncing…' : prData.lastFetched ? `Updated ${formatRelativeTime(prData.lastFetched)}` : 'Waiting for first sync',
+		syncing ? syncText : prData.lastFetched ? `Updated ${formatRelativeTime(prData.lastFetched)}` : 'Waiting for first sync',
 	);
 	let fullpageShellClasses = $derived(isFullpageMode ? 'w-full max-w-[80rem]' : 'h-full');
 	let cardListClasses = $derived(isFullpageMode ? 'grid gap-3 xl:grid-cols-2' : 'flex flex-col gap-3 pr-1 scroll-thin');

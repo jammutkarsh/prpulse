@@ -3,17 +3,21 @@
 	import Button from '../../lib/components/Button.svelte';
 	import SectionCard from '../../lib/components/SectionCard.svelte';
 	import InteractiveGuide from '../../lib/components/InteractiveGuide.svelte';
+	import { onboardingSyncLabel } from '../../../lib/popup-session';
 	import type { Settings } from '../../../lib/types';
 
 	interface Props {
 		displayMode?: Settings['displayMode'];
 		syncedPrCount?: number;
-		/** The first sync is still running, so there is no count to show yet. */
+		/** The first sync is still running, so the count is a running total. */
 		syncing?: boolean;
+		/** The list on disk is a finished one, not the partial list of a sync that stopped. */
+		syncComplete?: boolean;
 		onClose?: () => void;
 	}
 
-	let { displayMode = 'popup', syncedPrCount = 0, syncing = false, onClose = () => {} }: Props = $props();
+	let { displayMode = 'popup', syncedPrCount = 0, syncing = false, syncComplete = false, onClose = () => {} }: Props = $props();
+	let syncLabel = $derived(onboardingSyncLabel(syncing, syncComplete, syncedPrCount));
 </script>
 
 <SectionCard className="p-6">
@@ -24,14 +28,12 @@
 		<div class="space-y-2">
 			<h2 class="text-2xl font-semibold text-white">Get familiar with PR Pulse</h2>
 			<p class="desc">Hover over the elements in the sample card below to see how it works.</p>
-			{#if syncing || syncedPrCount > 0}
+			{#if syncLabel}
 				<div class="inline-flex items-center gap-1.5 rounded-full border border-(--accent-border) bg-(--accent-muted) px-3 py-1 text-xs font-medium text-(--accent)">
 					{#if syncing}
 						<RefreshCw class="h-3 w-3 animate-spin" />
-						<span>Syncing pull requests…</span>
-					{:else}
-						<span>Synced {syncedPrCount} PR{syncedPrCount !== 1 ? 's' : ''}</span>
 					{/if}
+					<span>{syncLabel}</span>
 				</div>
 			{/if}
 		</div>

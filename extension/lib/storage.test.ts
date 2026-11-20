@@ -84,16 +84,23 @@ async function testAuthenticatedNeedsTokenAndUser(): Promise<void> {
 	assert.equal(await storage.isAuthenticated(), false);
 }
 
-async function testSyncStatusIsPartOfBootstrap(): Promise<void> {
+// A partial first-sync write must keep `lastFetched` null: notifications read null as "nothing to diff
+// against", which is what stops a first sync that died halfway from announcing every PR next poll.
+async function testPartialWritesStayUnfetched(): Promise<void> {
 	const storage = createStorage(createMemoryStore());
-	assert.equal((await storage.getBootstrapData()).syncStatus, undefined);
 
-	const status = { inProgress: true, startedAt: 1 };
+	await storage.setPartialPullRequests({ myPRs: [], reviewRequests: [] });
+	assert.equal((await storage.getPullRequests()).lastFetched, null);
+
+	await storage.setPullRequests({ myPRs: [], reviewRequests: [] });
+	assert.notEqual((await storage.getPullRequests()).lastFetched, null);
+
+	const status = { inProgress: true, loaded: 1, total: 2, startedAt: 1 };
 	await storage.setSyncStatus(status);
 	assert.deepEqual((await storage.getBootstrapData()).syncStatus, status);
 }
 
-await testSyncStatusIsPartOfBootstrap();
+await testPartialWritesStayUnfetched();
 await testDefaultsOnEmptyStore();
 await testBootstrapMatchesTheIndividualReads();
 await testSettingsMerge();

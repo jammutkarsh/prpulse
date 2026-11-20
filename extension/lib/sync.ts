@@ -44,13 +44,15 @@ export async function runSync({
 	};
 
 	const startedAt = Date.now();
-	// Best-effort: a failed status write must not turn a good fetch into a failed sync.
-	const writeStatus = (status: SyncStatus) => storage.setSyncStatus(status).catch((error) => console.warn('Status write failed:', error));
-	// Chained so the writes land in order, and all before the final one.
-	let statusWrites: Promise<unknown> = writeStatus({ inProgress: true, startedAt, updatedAt: startedAt });
-	// A request can outlast the worker's idle timeout; a storage call every so often keeps it alive.
+	let status: SyncStatus = { inProgress: true, loaded: 0, total: 0, startedAt, updatedAt: startedAt };
+	// Best-effort: a failed progress write must not turn a good fetch into a failed sync.
+	const writeStatus = (next: SyncStatus) => storage.setSyncStatus(next).catch((error) => console.warn('Progress write failed:', error));
+	// Writes from the progress callback, chained so they land in order and all before the final write.
+	let progressWrites: Promise<unknown> = writeStatus(status);
+	// Page requests can outlast the worker's idle timeout; a storage call every so often keeps it alive.
 	const heartbeat = setInterval(() => {
-		statusWrites = statusWrites.then(() => writeStatus({ inProgress: true, startedAt, updatedAt: Date.now() }));
+		status = { ...status, updatedAt: Date.now() };
+		progressWrites = progressWrites.then(() => writeStatus(status));
 	}, heartbeatMs);
 
 	try {
@@ -58,14 +60,32 @@ export async function runSync({
 		// Read before the overwrite: the previous poll's result is still on disk at this instant, which is
 		// the whole reason notifications need no snapshot key of their own.
 		const previous = await storage.getPullRequests();
-		const data = await fetchWithRetry(() => source.getAllPullRequests());
+		// Only a first sync shows PRs as they arrive. Afterwards the popup keeps the last complete list
+		// until the new one is whole, rather than shrinking to page one and growing back on every poll.
+		const firstSync = previous.lastFetched === null;
+
+		const data = await fetchWithRetry(() =>
+			source.getAllPullRequests((partial, progress) => {
+				status = { inProgress: true, ...progress, startedAt, updatedAt: Date.now() };
+				const written = status;
+				progressWrites = progressWrites.then(async () => {
+					if (!(await stillCurrent())) return;
+					await Promise.all([
+						writeStatus(written),
+						firstSync
+							? storage.setPartialPullRequests(partial).catch((error) => console.warn('Partial write failed:', error))
+							: null,
+					]);
+				});
+			}),
+		);
+		await progressWrites;
 		if (!(await stillCurrent())) {
 			console.log('Provider changed during sync, discarding result');
 			return;
 		}
 		await storage.setPullRequests(data);
-		// A good fetch proves the token works, whatever an earlier failure flagged. Re-read: the provider
-		// may have changed since the sync started (a refreshed token expiry), and this must not undo it.
+		// A good fetch proves the token works, whatever an earlier failure flagged.
 		const current = await storage.getProvider();
 		if (current?.isTokenInvalid) {
 			await storage.setProvider({ ...current, isTokenInvalid: false });
@@ -86,10 +106,12 @@ export async function runSync({
 		throw error;
 	} finally {
 		clearInterval(heartbeat);
-		await statusWrites.catch(() => undefined);
+		await progressWrites.catch(() => undefined);
 		// After a reset the status key was cleared on purpose; writing it back would resurrect state the user wiped.
 		if (await storage.getProvider().catch(() => undefined)) {
-			await writeStatus({ inProgress: false, startedAt, updatedAt: Date.now() });
+			await storage
+				.setSyncStatus({ inProgress: false, loaded: 0, total: 0, startedAt, updatedAt: Date.now() })
+				.catch((error) => console.warn('Failed to clear sync status:', error));
 		}
 	}
 }

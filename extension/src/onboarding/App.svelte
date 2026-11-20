@@ -53,8 +53,9 @@
 	let completingSetup = $state(false);
 	let onboardingStateReady = $state(false);
 	let syncedPrCount = $state(0);
-	// The first sync runs on after setup finishes; the last step says so until the PRs land.
+	// The first sync runs on after setup finishes; the last step counts PRs as they land.
 	let syncing = $state(false);
+	let syncComplete = $state(false);
 	let stopSyncWatch: (() => void) | null = null;
 	onDestroy(() => stopSyncWatch?.());
 
@@ -147,11 +148,13 @@
 			// of seconds, and the last step is useful long before it ends.
 			stopSyncWatch?.();
 			syncing = true;
+			syncComplete = false;
 			stopSyncWatch = storageOnChangedAddListener((changes: StorageChangeMap, areaName: string) => {
 				if (areaName !== 'local') return;
 				const data = changes.pullRequests?.newValue as PullRequestData | undefined;
 				if (data) {
 					syncedPrCount = (data.myPRs?.length || 0) + (data.reviewRequests?.length || 0);
+					syncComplete = data.lastFetched !== null;
 				}
 				const status = changes.syncStatus?.newValue as SyncStatus | undefined;
 				if (changes.syncStatus) {
@@ -272,6 +275,7 @@
 				displayMode={settings.displayMode}
 				{syncedPrCount}
 				{syncing}
+				{syncComplete}
 				onClose={closeSetup}
 			/>
 		{/if}

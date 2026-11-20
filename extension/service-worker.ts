@@ -80,6 +80,11 @@ function runSync(options?: SyncOptions): Promise<void> {
 /** The count itself is decided by the view module, so the popup and the badge cannot disagree. */
 async function refreshBadge(): Promise<void> {
 	const { settings, pullRequests } = await storage.getBootstrapData();
+	// A first sync's partial list is not a count worth showing.
+	if (pullRequests.lastFetched === null) {
+		await updateBadge(0);
+		return;
+	}
 	const filters = await storage.getFilters(settings.pinnedTab);
 	await updateBadge(badgeCount(pullRequests, settings, filters));
 }

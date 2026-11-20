@@ -168,6 +168,24 @@ async function testFetchSurvivesQueryTimeouts(): Promise<void> {
 	assert.equal(capped.myPRs.length, 300);
 }
 
+// Every page reports everything fetched so far, so the popup can show a slow first sync as it lands.
+async function testProgressReportsEveryPage(): Promise<void> {
+	const github = fakeGitHub(60, 25);
+	const reports: Array<{ myPRs: number; loaded: number; total: number }> = [];
+	const result = await withFetch(github.fetchStub as typeof fetch, () =>
+		new GitHubProvider({ token: 't' }).getAllPullRequests((partial, progress) => {
+			reports.push({ myPRs: partial.myPRs.length, ...progress });
+		}),
+	);
+
+	assert.deepEqual(reports, [
+		{ myPRs: 25, loaded: 25, total: 60 },
+		{ myPRs: 50, loaded: 50, total: 60 },
+		{ myPRs: 60, loaded: 60, total: 60 },
+	]);
+	assert.equal(result.myPRs.length, 60);
+}
+
 await testFetchSurvivesQueryTimeouts();
 // Review status, modelled on a real PR: a code-quality bot approved it four times, a team's review was
 // still requested, and GitHub said REVIEW_REQUIRED. It used to read as approved. Run with: bun run test
@@ -215,7 +233,12 @@ function testReviewStatus(): void {
 	// A GitHub-reported CHANGES_REQUESTED still yields the deep-link fields, skipping bot reviews.
 	const changes = buildReviews(
 		pr({
-			reviews: { nodes: [{ ...review('ada', 'CHANGES_REQUESTED'), databaseId: 7 }, { ...review('bot', 'CHANGES_REQUESTED', 'Bot'), databaseId: 9 }] },
+			reviews: {
+				nodes: [
+					{ ...review('ada', 'CHANGES_REQUESTED'), databaseId: 7 },
+					{ ...review('bot', 'CHANGES_REQUESTED', 'Bot'), databaseId: 9 },
+				],
+			},
 			reviewThreads: {
 				nodes: [{ isResolved: false, isOutdated: false, comments: { nodes: [{ url: 'u1', createdAt: '2024-01-01T00:00:00Z' }] } }],
 			},
@@ -249,4 +272,5 @@ function testBehindCounts(): void {
 }
 
 testBehindCounts();
+await testProgressReportsEveryPage();
 console.log('github-provider: all checks passed');

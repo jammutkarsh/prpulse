@@ -106,6 +106,15 @@ export function createStorage(store: KeyValueStore) {
 		});
 	}
 
+	/**
+	 * Part of a first sync, written so the popup has something to show while the rest loads.
+	 * `lastFetched` stays null on purpose: notifications treat null as "nothing to diff against", so a
+	 * first sync that dies halfway cannot make the next poll announce every PR it had not reached yet.
+	 */
+	async function setPartialPullRequests(pullRequests: Omit<PullRequestData, 'lastFetched'>): Promise<void> {
+		return set(STORAGE_KEYS.PULL_REQUESTS, { ...pullRequests, lastFetched: null });
+	}
+
 	async function setSyncStatus(status: SyncStatus): Promise<void> {
 		return set(STORAGE_KEYS.SYNC_STATUS, status);
 	}
@@ -164,6 +173,7 @@ export function createStorage(store: KeyValueStore) {
 		setProvider,
 		getPullRequests,
 		setPullRequests,
+		setPartialPullRequests,
 		setSyncStatus,
 		getSettings,
 		getBootstrapData,
