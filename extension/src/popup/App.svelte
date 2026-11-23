@@ -6,6 +6,7 @@
 	import PopupStates from './PopupStates.svelte';
 	import SearchFilter from './SearchFilter.svelte';
 	import ListToolbar from './ListToolbar.svelte';
+	import PopupResizer from './PopupResizer.svelte';
 	import AttributionFooter from '../lib/components/AttributionFooter.svelte';
 	import NotificationTest from '../lib/components/NotificationTest.svelte';
 	import {
@@ -20,6 +21,8 @@
 	import { storage } from '../../lib/storage';
 	import type { PopupFilters, PopupTab, PullRequest, PullRequestData, Settings, SyncStatus } from '../../lib/types';
 	import { createPopupSession, type PopupState } from '../../lib/popup-session';
+	import { DEFAULT_SETTINGS } from '../../lib/ui-config';
+	import type { PopupSize } from '../../lib/popup-size';
 	import { applyRepoFilter, hasRepoRules } from '../../lib/repo-filter';
 	import { createDefaultFilters, createPrView, groupByRepo, sameFilters, sortPullRequests } from '../../lib/pr-view';
 	import {
@@ -172,6 +175,23 @@
 		showToast(justEnabled ? 'Notifications on' : 'Notifications stay off', justEnabled ? 'success' : 'info');
 	}
 
+	// The stored config is in rem, like the rest of the UI config; the handles work in pixels.
+	function rootFontSize(): number {
+		return Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+	}
+
+	function defaultPopupSize(): PopupSize {
+		const rem = rootFontSize();
+		return { width: DEFAULT_SETTINGS.ui.popupWidthRem * rem, height: DEFAULT_SETTINGS.ui.popupHeightRem * rem };
+	}
+
+	function rememberPopupSize(size: PopupSize) {
+		const rem = rootFontSize();
+		void session.updateSettings({
+			ui: { ...popup.settings.ui, popupWidthRem: size.width / rem, popupHeightRem: size.height / rem },
+		});
+	}
+
 	function toggleSearch() {
 		if (!isSearchOpen) {
 			isSearchOpen = true;
@@ -232,7 +252,7 @@
 		syncing ? syncText : prData.lastFetched ? `Updated ${formatRelativeTime(prData.lastFetched)}` : 'Waiting for first sync',
 	);
 	let fullpageShellClasses = $derived(isFullpageMode ? 'w-full max-w-[80rem]' : 'h-full');
-	let cardListClasses = $derived(isFullpageMode ? 'grid gap-3 xl:grid-cols-2' : 'flex flex-col gap-3 pr-1 scroll-thin');
+	let cardListClasses = $derived(isFullpageMode ? 'grid gap-3 xl:grid-cols-2' : 'popup-card-grid pr-1 scroll-thin');
 	let view = $derived(createPrView(currentItems, activeFilters, searchQuery, currentTab));
 	// A search result is already ranked by relevance; re-sorting it would bury the best match.
 	let filteredItems = $derived(searchQuery.trim() ? view.items : sortPullRequests(view.items, settings.sortBy));
@@ -395,6 +415,10 @@
 
 		{#if isFullpageMode}
 			<AttributionFooter />
+		{/if}
+
+		{#if !isFullpageMode}
+			<PopupResizer defaultSize={defaultPopupSize()} onResize={rememberPopupSize} />
 		{/if}
 
 		{#if toastVisible}
