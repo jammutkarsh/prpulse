@@ -206,6 +206,20 @@ async function testDeclinedPermissionStoresOff(): Promise<void> {
 	assert.equal((await storage.getSettings()).notificationsEnabled, false);
 }
 
+async function testViewSettingsStick(): Promise<void> {
+	const { session, storage } = sessionOver({ provider: connectedProvider });
+	await session.open();
+
+	await session.updateSettings({ groupByRepo: true, sortBy: 'repo' });
+
+	assert.equal(session.getState().settings.groupByRepo, true);
+	const stored = await storage.getSettings();
+	assert.equal(stored.groupByRepo, true);
+	assert.equal(stored.sortBy, 'repo');
+	// A partial write must not reset what it did not mention.
+	assert.equal(stored.pinnedTab, 'myPRs');
+}
+
 async function testRefreshBlockedBeforeSetup(): Promise<void> {
 	const { session, sent } = sessionOver({});
 	await session.open();
@@ -252,6 +266,7 @@ await testNewPrCountIgnoresPartialOpen();
 testOnboardingSyncLabel();
 await testRefreshSurfacesDeadToken();
 await testNotificationAnswerSticks();
+await testViewSettingsStick();
 await testDeclinedPermissionStoresOff();
 await testRefreshBlockedBeforeSetup();
 console.log('popup-session: all checks passed');

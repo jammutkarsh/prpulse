@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
+	import { FolderGit2 } from 'lucide-svelte';
 	import PopupHeader from './PopupHeader.svelte';
 	import PrCard from './PrCard.svelte';
 	import PopupStates from './PopupStates.svelte';
 	import SearchFilter from './SearchFilter.svelte';
+	import ListToolbar from './ListToolbar.svelte';
 	import AttributionFooter from '../lib/components/AttributionFooter.svelte';
 	import NotificationTest from '../lib/components/NotificationTest.svelte';
 	import {
@@ -16,9 +18,9 @@
 		type Unsubscribe,
 	} from '../../lib/extension-api';
 	import { storage } from '../../lib/storage';
-	import type { PopupFilters, PopupTab, PullRequestData, Settings, SyncStatus } from '../../lib/types';
+	import type { PopupFilters, PopupTab, PullRequest, PullRequestData, Settings, SyncStatus } from '../../lib/types';
 	import { createPopupSession, type PopupState } from '../../lib/popup-session';
-	import { createDefaultFilters, createPrView, sameFilters } from '../../lib/pr-view';
+	import { createDefaultFilters, createPrView, groupByRepo, sameFilters, sortPullRequests } from '../../lib/pr-view';
 	import {
 		copyToClipboard,
 		formatRelativeTime,
@@ -225,7 +227,9 @@
 	let fullpageShellClasses = $derived(isFullpageMode ? 'w-full max-w-[80rem]' : 'h-full');
 	let cardListClasses = $derived(isFullpageMode ? 'grid gap-3 xl:grid-cols-2' : 'flex flex-col gap-3 pr-1 scroll-thin');
 	let view = $derived(createPrView(currentItems, activeFilters, searchQuery, currentTab));
-	let filteredItems = $derived(view.items);
+	// A search result is already ranked by relevance; re-sorting it would bury the best match.
+	let filteredItems = $derived(searchQuery.trim() ? view.items : sortPullRequests(view.items, settings.sortBy));
+	let repoGroups = $derived(settings.groupByRepo ? groupByRepo(filteredItems) : []);
 	let filterCount = $derived(view.filterCount);
 	let filterActive = $derived(filterCount > 0);
 	let showSearchControls = $derived(!loading && !setupRequired && currentItems.length > 0);
@@ -244,6 +248,9 @@
 	});
 </script>
 
+{#snippet card(pr: PullRequest)}
+	<PrCard {pr} {isFullpageMode} {settings} {copiedItemId} onOpenUrl={safeOpenUrl} onCopy={handleCopy} />
+{/snippet}
 
 <div class={isFullpageMode ? 'min-h-screen px-6 py-6' : 'popup-frame'}>
 	<div class={`mx-auto flex ${fullpageShellClasses} min-h-0 flex-col gap-3`}>
@@ -281,6 +288,15 @@
 				<div class="border-b border-soft px-4 py-2.5">
 					<NotificationTest />
 				</div>
+			{/if}
+
+			{#if showSearchControls}
+				<ListToolbar
+					groupByRepo={settings.groupByRepo}
+					sortBy={settings.sortBy}
+					onGroupByRepoChange={(groupByRepo) => void session.updateSettings({ groupByRepo })}
+					onSortChange={(sortBy) => void session.updateSettings({ sortBy })}
+				/>
 			{/if}
 
 			{#if showSearchControls && isSearchOpen}
@@ -322,17 +338,28 @@
 							<p>No PRs match your filters.</p>
 							<button class="mt-2 text-sm text-(--accent) hover:underline" onclick={() => { searchQuery = ''; activeFilters = createDefaultFilters(); }}>Clear filters</button>
 						</div>
+					{:else if settings.groupByRepo}
+						<div class="flex flex-col gap-4">
+							{#each repoGroups as group (group.repo)}
+								<section>
+									<div class="mb-2 flex items-center gap-2 text-xs font-semibold text-soft">
+										<FolderGit2 class="h-3.5 w-3.5 shrink-0" />
+										<button class="unstyled-button min-w-0 truncate text-white hover:text-(--accent) hover:underline" title={group.repo} onclick={() => safeOpenUrl(`https://github.com/${encodeURI(group.repo)}`)}>{group.repo}</button>
+										<span class="shrink-0 rounded-full bg-white/8 px-1.5 py-0.5 text-[10px] leading-none">{group.items.length}</span>
+										<span class="h-px flex-1 bg-(--border-soft)"></span>
+									</div>
+									<div class={cardListClasses}>
+										{#each group.items as pr (pr.id)}
+											{@render card(pr)}
+										{/each}
+									</div>
+								</section>
+							{/each}
+						</div>
 					{:else}
 						<div class={cardListClasses}>
 							{#each filteredItems as pr (pr.id)}
-								<PrCard
-									{pr}
-									{isFullpageMode}
-									{settings}
-									{copiedItemId}
-									onOpenUrl={safeOpenUrl}
-									onCopy={handleCopy}
-								/>
+								{@render card(pr)}
 							{/each}
 						</div>
 					{/if}

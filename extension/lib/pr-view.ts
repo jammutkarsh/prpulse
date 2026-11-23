@@ -201,6 +201,50 @@ function searchItems(items: PullRequest[], query: string): PullRequest[] {
 	return index.search(query).map(({ item: { _jiraTicket, ...pr } }) => pr);
 }
 
+export type PrSort = Settings['sortBy'];
+
+export const PR_SORT_OPTIONS: ReadonlyArray<{ value: PrSort; label: string }> = [
+	{ value: 'updated', label: 'Recently updated' },
+	{ value: 'newest', label: 'Newest' },
+	{ value: 'oldest', label: 'Oldest' },
+	{ value: 'repo', label: 'Repository' },
+	{ value: 'title', label: 'Title' },
+];
+
+/** ISO 8601 timestamps order correctly as plain strings; a missing one sorts as oldest. */
+function byTimeDesc(left: string | undefined, right: string | undefined): number {
+	return (right || '').localeCompare(left || '');
+}
+
+const SORT_COMPARATORS: Record<PrSort, (left: PullRequest, right: PullRequest) => number> = {
+	updated: (left, right) => byTimeDesc(left.updatedAt, right.updatedAt),
+	newest: (left, right) => byTimeDesc(left.createdAt, right.createdAt),
+	oldest: (left, right) => byTimeDesc(right.createdAt, left.createdAt),
+	repo: (left, right) => byText(left.repoFullName || '', right.repoFullName || '') || byTimeDesc(left.updatedAt, right.updatedAt),
+	title: (left, right) => byText(left.title || '', right.title || ''),
+};
+
+/** A sorted copy. The sort is stable, so ties keep the order the source returned them in. */
+export function sortPullRequests(items: PullRequest[], sortBy: PrSort): PullRequest[] {
+	return [...items].sort(SORT_COMPARATORS[sortBy] ?? SORT_COMPARATORS.updated);
+}
+
+export interface RepoGroup {
+	repo: string;
+	items: PullRequest[];
+}
+
+/** Groups in repository-name order; the PRs inside each keep the order they arrived in. */
+export function groupByRepo(items: PullRequest[]): RepoGroup[] {
+	const groups = new Map<string, PullRequest[]>();
+	for (const pr of items) {
+		const repo = pr.repoFullName || '';
+		groups.set(repo, [...(groups.get(repo) ?? []), pr]);
+	}
+
+	return Array.from(groups, ([repo, grouped]) => ({ repo, items: grouped })).sort((left, right) => byText(left.repo, right.repo));
+}
+
 export function countActiveFilters(filters: PopupFilters, tab: PopupTab): number {
 	// Age filter is temporarily disabled. Restore `Number(Boolean(filters.ageRange))` when re-enabling it.
 	return (

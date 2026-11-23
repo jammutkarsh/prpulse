@@ -5,8 +5,10 @@ import {
 	createDefaultFilters,
 	createDefaultFiltersByTab,
 	createPrView,
+	groupByRepo,
 	normalizeFilterState,
 	sameFilters,
+	sortPullRequests,
 	switchTab,
 } from './pr-view';
 import type { PullRequest } from './types';
@@ -266,6 +268,39 @@ function testConflictsFilter(): void {
 	assert.equal(normalizeFilterState({ tabs: { myPRs: { conflictsOnly: true } } }, 'myPRs').myPRs.conflictsOnly, true);
 }
 
+function testSortAndGroup(): void {
+	const list = [
+		pr({ id: 'a', repoFullName: 'zeta/web', title: 'banana', createdAt: '2026-01-03T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z' }),
+		pr({ id: 'b', repoFullName: 'acme/api', title: 'Cherry', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-02-03T00:00:00Z' }),
+		pr({ id: 'c', repoFullName: 'acme/api', title: 'apple', createdAt: '2026-01-02T00:00:00Z', updatedAt: '2026-02-02T00:00:00Z' }),
+		pr({ id: 'd', repoFullName: 'acme/web', title: 'apple', createdAt: '2026-01-02T00:00:00Z', updatedAt: '2026-02-02T00:00:00Z' }),
+	];
+	const ids = (sorted: PullRequest[]) => sorted.map((item) => item.id).join('');
+
+	assert.equal(ids(sortPullRequests(list, 'updated')), 'bcda');
+	assert.equal(ids(sortPullRequests(list, 'newest')), 'acdb');
+	assert.equal(ids(sortPullRequests(list, 'oldest')), 'bcda');
+	// Case-insensitive, and ties keep the incoming order.
+	assert.equal(ids(sortPullRequests(list, 'title')), 'cdab');
+	assert.equal(ids(sortPullRequests(list, 'repo')), 'bcda');
+	// The caller's array is left alone, and a value storage should never hold still sorts.
+	assert.equal(ids(list), 'abcd');
+	assert.equal(ids(sortPullRequests(list, 'bogus' as never)), 'bcda');
+
+	// Groups come out in repo order whatever the list order; items inside keep the list order.
+	const groups = groupByRepo(sortPullRequests(list, 'newest'));
+	assert.deepEqual(
+		groups.map((group) => [group.repo, ids(group.items)]),
+		[
+			['acme/api', 'cb'],
+			['acme/web', 'd'],
+			['zeta/web', 'a'],
+		],
+	);
+	assert.deepEqual(groupByRepo([]), []);
+}
+
 testSwitchTab();
 testConflictsFilter();
+testSortAndGroup();
 console.log('pr-view: all checks passed');

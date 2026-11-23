@@ -201,6 +201,12 @@ export function createPopupSession({
 		return granted;
 	}
 
+	/** View preferences changed from inside the popup. Shown at once, then written so the next open matches. */
+	async function updateSettings(patch: Partial<Settings>): Promise<void> {
+		set({ settings: { ...state.settings, ...patch } });
+		await storage.setSettings(patch);
+	}
+
 	/** A fresh write from the worker: whatever was not on screen when the popup opened counts as new. */
 	function applyPullRequests(pullRequests: PullRequestData): void {
 		// A partial first-sync list has no baseline: everything past page one would read as new.
@@ -259,6 +265,7 @@ export function createPopupSession({
 		setTab,
 		setFilters,
 		setNotifications,
+		updateSettings,
 		applyPullRequests,
 		applySyncStatus,
 		reload,
