@@ -26,6 +26,15 @@ type ExtensionManifest = {
 		  };
 	options_page: string;
 	icons: Record<string, string>;
+	/** Firefox's sidebar. */
+	sidebar_action?: {
+		default_panel: string;
+		default_title: string;
+		default_icon: Record<string, string>;
+		open_at_install: boolean;
+	};
+	/** Chrome's side panel. */
+	side_panel?: { default_path: string };
 	browser_specific_settings?: {
 		gecko: {
 			id: string;
@@ -78,6 +87,9 @@ const baseManifest = {
 	},
 } satisfies Omit<ExtensionManifest, 'background'>;
 
+// Must match SIDEBAR_PATH in extension/lib/extension-api.ts: the query string tells the page it is docked.
+const SIDEBAR_PATH = 'popup/popup.html?sidebar=1';
+
 const manifest = createManifest(browser, baseManifest);
 const resolvedOutputPath = resolve(process.cwd(), outputPath);
 
@@ -96,6 +108,13 @@ function createManifest(target: BrowserTarget, base: Omit<ExtensionManifest, 'ba
 				scripts: ['service-worker.js'],
 				type: 'module',
 			},
+			sidebar_action: {
+				default_panel: SIDEBAR_PATH,
+				default_title: 'PR Pulse',
+				default_icon: base.icons,
+				// Firefox opens a new sidebar on install unless told not to; the sidebar is opt-in here.
+				open_at_install: false,
+			},
 			browser_specific_settings: {
 				gecko: {
 					id: 'pr-pulse@utkarshchourasia.in',
@@ -112,6 +131,9 @@ function createManifest(target: BrowserTarget, base: Omit<ExtensionManifest, 'ba
 	// Optional but recommended for Chrome Web Store
 	return {
 		...base,
+		// `sidePanel` carries no install warning, so adding it does not disable existing installs.
+		permissions: [...base.permissions, 'sidePanel'],
+		side_panel: { default_path: SIDEBAR_PATH },
 		background: {
 			service_worker: 'service-worker.js',
 			type: 'module',

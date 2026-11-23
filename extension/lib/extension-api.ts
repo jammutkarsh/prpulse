@@ -66,6 +66,39 @@ export function tabsCreate(createProperties: browser.Tabs.CreateCreateProperties
 	return extensionBrowser.tabs.create(createProperties);
 }
 
+/** The dashboard page, as each surface loads it. The query string is how the page knows where it is. */
+export const POPUP_PATH = 'popup/popup.html';
+export const SIDEBAR_PATH = 'popup/popup.html?sidebar=1';
+
+/** An empty string removes the popup, which is what makes `action.onClicked` fire instead. */
+export function actionSetPopup(popup: string): Promise<void> {
+	return extensionBrowser.action.setPopup({ popup });
+}
+
+/**
+ * Deliberately not wrapped like the other listeners: opening a sidebar is only allowed inside the
+ * click's user gesture, so the listener has to run synchronously with nothing awaited in front of it.
+ */
+export function actionOnClickedAddListener(listener: () => void): void {
+	extensionBrowser.action.onClicked.addListener(() => listener());
+}
+
+/** Firefox's sidebar. Absent in Chrome, where the side panel opens itself — see below. */
+export function sidebarToggle(): void {
+	const sidebarAction = (extensionBrowser as unknown as { sidebarAction?: { toggle(): Promise<void> } }).sidebarAction;
+	void sidebarAction?.toggle().catch((error) => logExtensionApiError('sidebarAction.toggle', error));
+}
+
+/**
+ * Chrome's side panel has no toggle to call; instead the browser is told to open and close it on
+ * toolbar clicks. Absent in Firefox, and outside the polyfill, hence the raw `chrome` global.
+ */
+export async function sidePanelSetOpenOnActionClick(open: boolean): Promise<void> {
+	const sidePanel = (globalThis as { chrome?: { sidePanel?: { setPanelBehavior(behavior: { openPanelOnActionClick: boolean }): Promise<void> } } })
+		.chrome?.sidePanel;
+	await sidePanel?.setPanelBehavior({ openPanelOnActionClick: open });
+}
+
 export function actionSetBadgeText(details: browser.Action.SetBadgeTextDetailsType): Promise<void> {
 	return extensionBrowser.action.setBadgeText(details);
 }

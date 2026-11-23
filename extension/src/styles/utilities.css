@@ -43,6 +43,12 @@
 		overflow: hidden;
 	}
 
+	/* Docked in the browser's sidebar: the browser owns the size, the frame just fills it. */
+	.popup-frame-fill {
+		height: 100vh;
+		width: 100%;
+	}
+
 	/* One column at the default width; a popup dragged wide enough gets a second. */
 	.popup-card-grid {
 		display: grid;

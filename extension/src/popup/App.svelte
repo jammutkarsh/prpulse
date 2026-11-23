@@ -55,6 +55,11 @@
 	// Everything below is the popup's own surface state: what is open, what just got copied, what the
 	// toast says. The session owns the rest.
 	let isFullpageMode = $state(false);
+	// Docked in the browser's sidebar. Fixed for the life of the page, unlike the redirect-driven flag above.
+	const isSidebarMode = new URLSearchParams(window.location.search).has('sidebar');
+	// The sidebar and the full page stay open for hours; this keeps "Updated 3m ago" honest between syncs.
+	let clock = $state(0);
+	let clockTimer: ReturnType<typeof setInterval> | null = null;
 	let refreshInProgress = $state(false);
 	let copiedItemId = $state<string | null>(null);
 	let toastMessage = $state('');
@@ -81,11 +86,15 @@
 		});
 		void init();
 		window.addEventListener('keydown', handleKeydown);
+		clockTimer = setInterval(() => {
+			clock += 1;
+		}, 30_000);
 	});
 
 	onDestroy(() => {
 		unsubscribeStorage?.();
 		unsubscribeSession?.();
+		if (clockTimer) clearInterval(clockTimer);
 		window.removeEventListener('keydown', handleKeydown);
 	});
 
@@ -102,7 +111,8 @@
 	async function redirectToFullpage(bootstrapSettings: Settings): Promise<boolean> {
 		isFullpageMode = new URLSearchParams(window.location.search).has('fullpage');
 
-		if (bootstrapSettings.displayMode === 'fullpage' && !isFullpageMode) {
+		// The sidebar can be opened from the browser's own menu whatever the display mode is; it stays put.
+		if (bootstrapSettings.displayMode === 'fullpage' && !isFullpageMode && !isSidebarMode) {
 			await tabsCreate({ url: runtimeGetURL('popup/popup.html?fullpage=1') });
 			window.close();
 			return true;
@@ -249,7 +259,7 @@
 	let repoHiddenCount = $derived(tabTotal - currentItems.length);
 	let syncText = $derived(sync && sync.total > 0 ? `Syncing… ${Math.min(sync.loaded, sync.total)} of ${sync.total} PRs` : 'Syncing…');
 	let lastUpdatedText = $derived(
-		syncing ? syncText : prData.lastFetched ? `Updated ${formatRelativeTime(prData.lastFetched)}` : 'Waiting for first sync',
+		syncing ? syncText : prData.lastFetched && clock >= 0 ? `Updated ${formatRelativeTime(prData.lastFetched)}` : 'Waiting for first sync',
 	);
 	let fullpageShellClasses = $derived(isFullpageMode ? 'w-full max-w-[80rem]' : 'h-full');
 	let cardListClasses = $derived(isFullpageMode ? 'grid gap-3 xl:grid-cols-2' : 'popup-card-grid pr-1 scroll-thin');
@@ -281,7 +291,7 @@
 	<PrCard {pr} {isFullpageMode} {settings} {copiedItemId} onOpenUrl={safeOpenUrl} onCopy={handleCopy} />
 {/snippet}
 
-<div class={isFullpageMode ? 'min-h-screen px-6 py-6' : 'popup-frame'}>
+<div class={isFullpageMode ? 'min-h-screen px-6 py-6' : isSidebarMode ? 'popup-frame popup-frame-fill' : 'popup-frame'}>
 	<div class={`mx-auto flex ${fullpageShellClasses} min-h-0 flex-col gap-3`}>
 		<div class={`surface-card overflow-hidden ${isFullpageMode ? '' : 'flex h-full flex-col'}`}>
 			<PopupHeader
@@ -417,7 +427,7 @@
 			<AttributionFooter />
 		{/if}
 
-		{#if !isFullpageMode}
+		{#if !isFullpageMode && !isSidebarMode}
 			<PopupResizer defaultSize={defaultPopupSize()} onResize={rememberPopupSize} />
 		{/if}
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowLeft, CheckCircle2, ChevronDown, Clock3, Eraser, Expand, FolderGit2, GitPullRequest, Inbox, Kanban, ListFilter, MonitorCog, MonitorSmartphone, Pin, Save, ShieldAlert, Ticket, UserRound, Sparkles, Copy, Check, Bell, BellOff, List, Layers } from 'lucide-svelte';
+	import { ArrowLeft, CheckCircle2, ChevronDown, Clock3, Eraser, Expand, FolderGit2, GitPullRequest, Inbox, Kanban, ListFilter, MonitorCog, MonitorSmartphone, PanelRight, Pin, Save, ShieldAlert, Ticket, UserRound, Sparkles, Copy, Check, Bell, BellOff, List, Layers } from 'lucide-svelte';
 	import Button from '../lib/components/Button.svelte';
 	import RadioCard from '../lib/components/RadioCard.svelte';
 	import SectionCard from '../lib/components/SectionCard.svelte';
@@ -171,6 +171,8 @@
 
 	async function updateDisplayMode(value: Settings['displayMode']) {
 		await updateSetting('displayMode', value);
+		// The worker re-points the toolbar button: a sidebar only opens from a button that has no popup.
+		await runtimeSendMessage({ type: 'SETTINGS_CHANGED', settings: { displayMode: value } });
 	}
 
 	async function updatePollingInterval(event: Event) {
@@ -557,6 +559,7 @@
 				<div class="grid gap-3">
 					<RadioCard name="displayMode" value="popup" currentValue={currentSettings.displayMode || 'popup'} title="Popup" description="Keep the toolbar interaction lightweight and compact." iconComponent={MonitorSmartphone} onchange={updateDisplayMode} />
 					<RadioCard name="displayMode" value="fullpage" currentValue={currentSettings.displayMode || 'popup'} title="Full Page" description="Use a larger tab surface for denser layouts" iconComponent={Expand} onchange={updateDisplayMode} />
+					<RadioCard name="displayMode" value="sidebar" currentValue={currentSettings.displayMode || 'popup'} title="Sidebar" description="Dock the dashboard beside the page at full window height. The toolbar button opens and closes it." iconComponent={PanelRight} onchange={updateDisplayMode} />
 				</div>
 			</SectionCard>
 		</div>

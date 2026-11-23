@@ -124,7 +124,8 @@ export interface Settings {
 	jiraBaseUrl: string;
 	/** Linear workspace slug: the `acme` in `linear.app/acme`. */
 	linearWorkspace: string;
-	displayMode: 'popup' | 'fullpage';
+	/** What a toolbar click opens. `sidebar` is the browser's own side panel, which the popup's 800×600 cap does not apply to. */
+	displayMode: 'popup' | 'fullpage' | 'sidebar';
 	pinnedTab: 'myPRs' | 'toReview';
 	visibleColumns: string[];
 	pollingIntervalMs: number;
