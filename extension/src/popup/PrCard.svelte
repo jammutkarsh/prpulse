@@ -15,8 +15,8 @@
 		formatLocalDateTime,
 		formatPrAge,
 	} from '../../lib/utils';
-	import { jiraLinkFor } from '../../lib/jira';
-	import type { PullRequest, Settings } from '../../lib/types';
+	import { issueLinkFor, NO_ISSUE_TRACKER, type IssueTrackerSettings } from '../../lib/issue-tracker';
+	import type { PullRequest } from '../../lib/types';
 
 	// `tone` and `dot` are the CSS classes this card applies directly, so the maps live beside it.
 	interface StatusDisplay {
@@ -55,12 +55,10 @@
 		}
 	}
 
-	type PullRequestCardSettings = Pick<Settings, 'jiraBaseUrl'>;
-
 	interface Props {
 		pr: PullRequest;
 		isFullpageMode?: boolean;
-		settings?: PullRequestCardSettings;
+		settings?: IssueTrackerSettings;
 		copiedItemId?: string | null;
 		onOpenUrl?: (url: string) => void;
 		onCopy?: (value: string, id: string) => void;
@@ -69,7 +67,7 @@
 	let {
 		pr,
 		isFullpageMode = false,
-		settings = { jiraBaseUrl: '' },
+		settings = NO_ISSUE_TRACKER,
 		copiedItemId = null,
 		onOpenUrl = () => {},
 		onCopy = () => {}
@@ -84,7 +82,7 @@
 	}
 
 	function getJiraLink(pr: PullRequest) {
-		const link = jiraLinkFor(pr.branchName, settings.jiraBaseUrl);
+		const link = issueLinkFor(pr.branchName, settings);
 		return link && isValidHttpUrl(link.url) ? link : null;
 	}
 

@@ -5,6 +5,7 @@
 	import SearchFilter from '../../../extension/src/popup/SearchFilter.svelte';
 	import AttributionFooter from '../../../extension/src/lib/components/AttributionFooter.svelte';
 	import type { PullRequest, PopupFilters, PopupTab, StoredProviderConfig } from '../../../extension/lib/types';
+	import { NO_ISSUE_TRACKER } from '../../../extension/lib/issue-tracker';
 	import {
 		createDefaultFilters,
 		createDefaultFiltersByTab,
@@ -47,7 +48,7 @@
 	let filtersByTab = $state(createDefaultFiltersByTab());
 	let activeFilters = $state<PopupFilters>(createDefaultFilters());
 
-	const settings = { jiraBaseUrl: '' };
+	const settings = NO_ISSUE_TRACKER;
 
 	let provider = $derived<StoredProviderConfig>({
 		type: 'github',

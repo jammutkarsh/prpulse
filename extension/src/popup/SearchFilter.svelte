@@ -456,7 +456,7 @@
                         bind:this={searchInput}
                         type="text"
                         bind:value={query}
-                        placeholder="Search PRs, branches, repos, jira"
+                        placeholder="Search PRs, branches, repos, tickets"
                         class="field-input popup-search-input"
                     />
                     {#if hasQuery}

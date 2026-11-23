@@ -6,6 +6,7 @@
 	import type { PullRequestData, Settings, StoredProviderConfig, SyncStatus } from '../../lib/types';
 	import { activeSync } from '../../lib/popup-session';
 	import { commitJiraUrl } from '../../lib/jira';
+	import { commitLinearWorkspace } from '../../lib/linear';
 	import { commitProvider, connectGithubToken } from '../../lib/github-connect';
 	import GithubStep from './steps/GithubStep.svelte';
 	import DefaultViewStep from './steps/DefaultViewStep.svelte';
@@ -21,7 +22,7 @@
 	const STEP_NOTIFICATIONS = 4;
 	const STEP_DISPLAY = 5;
 	const STEP_COMPLETE = 6;
-	type OnboardingSettings = Pick<Settings, 'pinnedTab' | 'jiraBaseUrl' | 'displayMode' | 'notificationsEnabled'>;
+	type OnboardingSettings = Pick<Settings, 'pinnedTab' | 'issueTracker' | 'jiraBaseUrl' | 'linearWorkspace' | 'displayMode' | 'notificationsEnabled'>;
 	type OnboardingSessionState = {
 		currentStep?: number;
 		providerData?: StoredProviderConfig | null;
@@ -32,7 +33,7 @@
 	const steps = [
 		{ id: STEP_GITHUB, label: 'GitHub' },
 		{ id: STEP_DEFAULT_VIEW, label: 'Default view' },
-		{ id: STEP_JIRA, label: 'Jira' },
+		{ id: STEP_JIRA, label: 'Issues' },
 		{ id: STEP_NOTIFICATIONS, label: 'Notifications' },
 		{ id: STEP_DISPLAY, label: 'Display' },
 	];
@@ -41,7 +42,9 @@
 	let providerData = $state<StoredProviderConfig | null>(null);
 	let settings = $state<OnboardingSettings>({
 		pinnedTab: DEFAULT_SETTINGS.pinnedTab,
+		issueTracker: DEFAULT_SETTINGS.issueTracker,
 		jiraBaseUrl: DEFAULT_SETTINGS.jiraBaseUrl,
+		linearWorkspace: DEFAULT_SETTINGS.linearWorkspace,
 		displayMode: DEFAULT_SETTINGS.displayMode,
 		// Left unanswered on purpose: skipping the step keeps `null`, which is what makes the popup ask later.
 		notificationsEnabled: DEFAULT_SETTINGS.notificationsEnabled,
@@ -100,12 +103,22 @@
 
 	function nextStep() {
 		if (currentStep === STEP_JIRA) {
-			const committed = commitJiraUrl(settings.jiraBaseUrl);
-			if (committed === null) {
-				errorMessage = 'Please enter a valid Jira URL or leave the field empty.';
-				return;
+			// Only the selected tracker's field is on screen, so only that one can block the step.
+			if (settings.issueTracker === 'linear') {
+				const committed = commitLinearWorkspace(settings.linearWorkspace);
+				if (committed === null) {
+					errorMessage = 'Please enter a Linear workspace name or URL, or leave the field empty.';
+					return;
+				}
+				settings = { ...settings, linearWorkspace: committed };
+			} else {
+				const committed = commitJiraUrl(settings.jiraBaseUrl);
+				if (committed === null) {
+					errorMessage = 'Please enter a valid Jira URL or leave the field empty.';
+					return;
+				}
+				settings = { ...settings, jiraBaseUrl: committed };
 			}
-			settings = { ...settings, jiraBaseUrl: committed };
 		}
 
 		errorMessage = '';
@@ -142,7 +155,11 @@
 
 		try {
 			// Settings first: the worker reads them the moment the provider commit wakes it.
-			await storage.setSettings({ ...settings, jiraBaseUrl: commitJiraUrl(settings.jiraBaseUrl) ?? '' });
+			await storage.setSettings({
+				...settings,
+				jiraBaseUrl: commitJiraUrl(settings.jiraBaseUrl) ?? '',
+				linearWorkspace: commitLinearWorkspace(settings.linearWorkspace) ?? '',
+			});
 
 			// Follow the worker's first sync from here on. Nothing waits for it: with many PRs it takes tens
 			// of seconds, and the last step is useful long before it ends.
@@ -205,7 +222,7 @@
 				<div class="max-w-xl space-y-2">
 					<div class="section-title">Setup</div>
 					<h1 class="text-3xl font-semibold text-white">Configure PR Pulse</h1>
-					<p class="body-text">Connect GitHub, choose your default view, decide how you want to be notified, and optionally enable Jira ticket links.</p>
+					<p class="body-text">Connect GitHub, choose your default view, decide how you want to be notified, and optionally enable Jira or Linear ticket links.</p>
 				</div>
 				<div class="rounded-lg border border-soft bg-(--bg-muted) px-4 py-3 desc">
 					{currentStep === STEP_COMPLETE ? 'Setup complete' : `Step ${Math.min(currentStep, STEP_DISPLAY)} of ${STEP_DISPLAY}`}
@@ -250,8 +267,12 @@
 			/>
 		{:else if currentStep === STEP_JIRA}
 			<JiraStep
+				issueTracker={settings.issueTracker}
 				jiraBaseUrl={settings.jiraBaseUrl}
+				linearWorkspace={settings.linearWorkspace}
+				onTrackerChange={(issueTracker) => { errorMessage = ''; settings = { ...settings, issueTracker }; }}
 				onJiraUrlChange={updateJiraUrl}
+				onLinearWorkspaceChange={(linearWorkspace) => { settings = { ...settings, linearWorkspace }; }}
 				onNext={nextStep}
 				onBack={prevStep}
 			/>

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowLeft, CheckCircle2, ChevronDown, Clock3, Eraser, Expand, GitPullRequest, Inbox, ListFilter, MonitorCog, MonitorSmartphone, Pin, Save, ShieldAlert, Ticket, UserRound, Sparkles, Copy, Check, Bell, BellOff, List, Layers } from 'lucide-svelte';
+	import { ArrowLeft, CheckCircle2, ChevronDown, Clock3, Eraser, Expand, GitPullRequest, Inbox, Kanban, ListFilter, MonitorCog, MonitorSmartphone, Pin, Save, ShieldAlert, Ticket, UserRound, Sparkles, Copy, Check, Bell, BellOff, List, Layers } from 'lucide-svelte';
 	import Button from '../lib/components/Button.svelte';
 	import RadioCard from '../lib/components/RadioCard.svelte';
 	import SectionCard from '../lib/components/SectionCard.svelte';
@@ -12,6 +12,7 @@
 	import type { Settings, StoredProviderConfig } from '../../lib/types';
 	import { copyToClipboard } from '../../lib/utils';
 	import { commitJiraUrl, jiraDashboardUrlFor, sanitizeJiraUrl } from '../../lib/jira';
+	import { commitLinearWorkspace, linearDashboardUrlFor } from '../../lib/linear';
 	import { commitProvider, connectGithubToken, refreshTokenExpiration } from '../../lib/github-connect';
 	import { DEFAULT_SETTINGS } from '../../lib/ui-config';
 
@@ -32,6 +33,8 @@
 	let currentSettings = $state<Settings>(DEFAULT_SETTINGS);
 	let jiraUrl = $state('');
 	let jiraUrlError = $state('');
+	let linearWorkspace = $state('');
+	let linearError = $state('');
 	let pollingIntervalMs = $state(600000);
 	let selectedPollingValue = $state(600000);
 	let customMinutes = $state(10);
@@ -61,6 +64,7 @@
 
 	let isConnected = $derived(!!(provider && provider.user && !reconnecting));
 	let jiraDashboardUrl = $derived(jiraDashboardUrlFor(jiraUrl));
+	let linearDashboardUrl = $derived(linearDashboardUrlFor(linearWorkspace));
 	let normalizedCustomMinutes = $derived.by(() => {
 		const parsed = Number(customMinutes);
 		if (!Number.isFinite(parsed)) {
@@ -95,6 +99,7 @@
 		provider = nextProvider;
 		isTokenInvalid = provider?.isTokenInvalid ?? false;
 		jiraUrl = sanitizeJiraUrl(currentSettings.jiraBaseUrl || '');
+		linearWorkspace = currentSettings.linearWorkspace || '';
 		pollingIntervalMs = currentSettings.pollingIntervalMs ?? 600000;
 		if (PRESET_POLLING_VALUES.has(pollingIntervalMs)) {
 			selectedPollingValue = pollingIntervalMs;
@@ -211,6 +216,18 @@
 		jiraUrlError = '';
 		jiraUrl = committed;
 		await updateSetting('jiraBaseUrl', committed);
+	}
+
+	async function saveLinearWorkspace() {
+		const committed = commitLinearWorkspace(linearWorkspace);
+		if (committed === null) {
+			linearError = 'Please enter a Linear workspace name or URL, or leave the field empty.';
+			return;
+		}
+
+		linearError = '';
+		linearWorkspace = committed;
+		await updateSetting('linearWorkspace', committed);
 	}
 
 	async function validateAndSaveToken() {
@@ -389,18 +406,33 @@
 					<Ticket class="h-5 w-5" />
 				</div>
 				<div>
-					<h2 class="card-title">Jira Integration</h2>
-					<p class="desc">Jira origin link to derive ticket links from branch names.</p>
+					<h2 class="card-title">Issue Tracker</h2>
+					<p class="desc">Where the ticket ids in your branch names link to.</p>
 				</div>
 			</div>
 			<div class="space-y-3">
-				<input class="field-input" type="url" bind:value={jiraUrl} placeholder="https://company.atlassian.net/browse/PROJ-123" onblur={saveJiraUrl} />
-				{#if jiraUrlError}
-					<p class="text-sm text-(--danger)">{jiraUrlError}</p>
-				{:else if jiraDashboardUrl}
-					<p class="desc">Your Dashboard: <a class="link-accent" href={jiraDashboardUrl} target="_blank" rel="noopener noreferrer">{jiraDashboardUrl}</a></p>
+				<div class="grid-2">
+					<RadioCard name="issueTracker" value="jira" currentValue={currentSettings.issueTracker} title="Jira" description="Link tickets to a Jira Cloud or Data Center site." iconComponent={Ticket} onchange={() => updateSetting('issueTracker', 'jira')} />
+					<RadioCard name="issueTracker" value="linear" currentValue={currentSettings.issueTracker} title="Linear" description="Link issues to a Linear workspace." iconComponent={Kanban} onchange={() => updateSetting('issueTracker', 'linear')} />
+				</div>
+				{#if currentSettings.issueTracker === 'linear'}
+					<input class="field-input" type="text" bind:value={linearWorkspace} placeholder="acme or https://linear.app/acme" onblur={saveLinearWorkspace} />
+					{#if linearError}
+						<p class="text-sm text-(--danger)">{linearError}</p>
+					{:else if linearDashboardUrl}
+						<p class="desc">Your workspace: <a class="link-accent" href={linearDashboardUrl} target="_blank" rel="noopener noreferrer">{linearDashboardUrl}</a></p>
+					{:else}
+						<p class="desc">Enter the workspace name from your Linear URL, or paste any Linear link.</p>
+					{/if}
 				{:else}
-					<p class="desc">Enter any Jira URL and PR Pulse will normalize it to the base workspace URL.</p>
+					<input class="field-input" type="url" bind:value={jiraUrl} placeholder="https://company.atlassian.net/browse/PROJ-123" onblur={saveJiraUrl} />
+					{#if jiraUrlError}
+						<p class="text-sm text-(--danger)">{jiraUrlError}</p>
+					{:else if jiraDashboardUrl}
+						<p class="desc">Your Dashboard: <a class="link-accent" href={jiraDashboardUrl} target="_blank" rel="noopener noreferrer">{jiraDashboardUrl}</a></p>
+					{:else}
+						<p class="desc">Enter any Jira URL and PR Pulse will normalize it to the base workspace URL.</p>
+					{/if}
 				{/if}
 			</div>
 		</SectionCard>

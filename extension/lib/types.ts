@@ -119,7 +119,11 @@ export interface UiConfig {
 }
 
 export interface Settings {
+	/** Which tracker branch-name tickets link to. Both trackers' values are kept, so switching back loses nothing. */
+	issueTracker: 'jira' | 'linear';
 	jiraBaseUrl: string;
+	/** Linear workspace slug: the `acme` in `linear.app/acme`. */
+	linearWorkspace: string;
 	displayMode: 'popup' | 'fullpage';
 	pinnedTab: 'myPRs' | 'toReview';
 	visibleColumns: string[];

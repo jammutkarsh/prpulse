@@ -12,7 +12,9 @@ const DEFAULT_UI_CONFIG: UiConfig = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
+	issueTracker: 'jira',
 	jiraBaseUrl: '',
+	linearWorkspace: '',
 	displayMode: 'popup',
 	pinnedTab: 'myPRs',
 	visibleColumns: ['title', 'author', 'checks', 'reviewStatus', 'repo', 'changes', 'jira'],
