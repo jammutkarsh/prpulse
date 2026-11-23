@@ -207,10 +207,11 @@ async function testDeclinedPermissionStoresOff(): Promise<void> {
 }
 
 async function testViewSettingsStick(): Promise<void> {
-	const { session, storage } = sessionOver({ provider: connectedProvider });
+	const { session, storage, sent } = sessionOver({ provider: connectedProvider });
 	await session.open();
 
 	await session.updateSettings({ groupByRepo: true, sortBy: 'repo' });
+	assert.deepEqual(sent.at(-1), { type: 'SETTINGS_CHANGED', settings: { groupByRepo: true, sortBy: 'repo' } });
 
 	assert.equal(session.getState().settings.groupByRepo, true);
 	const stored = await storage.getSettings();

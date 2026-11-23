@@ -6,14 +6,24 @@
 	interface Props {
 		groupByRepo?: boolean;
 		sortBy?: PrSort;
+		/** Whether settings hold any include/exclude patterns. Without them the checkbox has nothing to switch. */
+		hasRepoRules?: boolean;
+		repoFilterEnabled?: boolean;
+		/** PRs in this tab the repository lists are currently hiding. */
+		hiddenCount?: number;
 		onGroupByRepoChange?: (value: boolean) => void;
+		onRepoFilterChange?: (value: boolean) => void;
 		onSortChange?: (value: PrSort) => void;
 	}
 
 	let {
 		groupByRepo = false,
 		sortBy = 'updated',
+		hasRepoRules = false,
+		repoFilterEnabled = true,
+		hiddenCount = 0,
 		onGroupByRepoChange = () => {},
+		onRepoFilterChange = () => {},
 		onSortChange = () => {},
 	}: Props = $props();
 </script>
@@ -28,6 +38,18 @@
 		/>
 		<span>Group by repo</span>
 	</label>
+
+	{#if hasRepoRules}
+		<label class="flex cursor-pointer items-center gap-1.5 hover:text-white" title="Apply the include and exclude repository lists from settings">
+			<input
+				type="checkbox"
+				class="rounded border-soft bg-black/40 text-(--accent) focus:ring-(--accent)"
+				checked={repoFilterEnabled}
+				onchange={(event) => onRepoFilterChange(event.currentTarget.checked)}
+			/>
+			<span>Repo filter{repoFilterEnabled && hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ''}</span>
+		</label>
+	{/if}
 
 	<label class="ml-auto flex items-center gap-1.5">
 		<span>Sort</span>

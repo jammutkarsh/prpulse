@@ -129,6 +129,12 @@ export interface Settings {
 	visibleColumns: string[];
 	pollingIntervalMs: number;
 	persistFilters: boolean;
+	/** The popup's checkbox: whether `repoInclude`/`repoExclude` are applied. Off keeps the lists but shows everything. */
+	repoFilterEnabled: boolean;
+	/** `owner/repo` patterns with `*` wildcards. Empty means every repository is included. */
+	repoInclude: string[];
+	/** Applied after `repoInclude`, so an exclude always wins. */
+	repoExclude: string[];
 	/** Show the list under one heading per repository. */
 	groupByRepo: boolean;
 	/** Order of the list, and of the PRs inside each group when grouped. */

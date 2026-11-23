@@ -300,7 +300,19 @@ function testSortAndGroup(): void {
 	assert.deepEqual(groupByRepo([]), []);
 }
 
+function testBadgeHonoursRepoLists(): void {
+	const data = { myPRs: items, reviewRequests: [] };
+	const base = { pinnedTab: 'myPRs' as const, badgeCountMode: 'total' as const };
+	const rules = { repoInclude: [], repoExclude: ['globex/*'] };
+
+	assert.equal(badgeCount(data, base, createDefaultFiltersByTab()), 4);
+	assert.equal(badgeCount(data, { ...base, ...rules, repoFilterEnabled: true }, createDefaultFiltersByTab()), 3);
+	// Unticking the popup's checkbox brings the hidden repositories back into the count.
+	assert.equal(badgeCount(data, { ...base, ...rules, repoFilterEnabled: false }, createDefaultFiltersByTab()), 4);
+}
+
 testSwitchTab();
+testBadgeHonoursRepoLists();
 testConflictsFilter();
 testSortAndGroup();
 console.log('pr-view: all checks passed');

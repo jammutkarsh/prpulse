@@ -267,7 +267,8 @@ const messageHandlers: Record<RuntimeMessage['type'], (message: RuntimeMessage) 
 				await setupPollingAlarm(true);
 			}
 
-			if ('pinnedTab' in message.settings || 'badgeCountMode' in message.settings) {
+			const badgeKeys = ['pinnedTab', 'badgeCountMode', 'repoFilterEnabled', 'repoInclude', 'repoExclude'];
+			if (badgeKeys.some((key) => key in message.settings)) {
 				await refreshBadge();
 			}
 		}

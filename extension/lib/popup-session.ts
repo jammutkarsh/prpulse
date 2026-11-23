@@ -201,10 +201,14 @@ export function createPopupSession({
 		return granted;
 	}
 
-	/** View preferences changed from inside the popup. Shown at once, then written so the next open matches. */
+	/** Settings changed from inside the popup. Shown at once, then written so the next open matches. */
 	async function updateSettings(patch: Partial<Settings>): Promise<void> {
 		set({ settings: { ...state.settings, ...patch } });
 		await storage.setSettings(patch);
+		// The worker owns the badge and decides which keys matter to it.
+		await sendMessage({ type: 'SETTINGS_CHANGED', settings: patch }).catch((error) => {
+			console.error('Failed to announce settings change:', error);
+		});
 	}
 
 	/** A fresh write from the worker: whatever was not on screen when the popup opened counts as new. */

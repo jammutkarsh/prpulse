@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowLeft, CheckCircle2, ChevronDown, Clock3, Eraser, Expand, GitPullRequest, Inbox, Kanban, ListFilter, MonitorCog, MonitorSmartphone, Pin, Save, ShieldAlert, Ticket, UserRound, Sparkles, Copy, Check, Bell, BellOff, List, Layers } from 'lucide-svelte';
+	import { ArrowLeft, CheckCircle2, ChevronDown, Clock3, Eraser, Expand, FolderGit2, GitPullRequest, Inbox, Kanban, ListFilter, MonitorCog, MonitorSmartphone, Pin, Save, ShieldAlert, Ticket, UserRound, Sparkles, Copy, Check, Bell, BellOff, List, Layers } from 'lucide-svelte';
 	import Button from '../lib/components/Button.svelte';
 	import RadioCard from '../lib/components/RadioCard.svelte';
 	import SectionCard from '../lib/components/SectionCard.svelte';
@@ -13,6 +13,7 @@
 	import { copyToClipboard } from '../../lib/utils';
 	import { commitJiraUrl, jiraDashboardUrlFor, sanitizeJiraUrl } from '../../lib/jira';
 	import { commitLinearWorkspace, linearDashboardUrlFor } from '../../lib/linear';
+	import { parseRepoPatterns } from '../../lib/repo-filter';
 	import { commitProvider, connectGithubToken, refreshTokenExpiration } from '../../lib/github-connect';
 	import { DEFAULT_SETTINGS } from '../../lib/ui-config';
 
@@ -35,6 +36,9 @@
 	let jiraUrlError = $state('');
 	let linearWorkspace = $state('');
 	let linearError = $state('');
+	let repoIncludeText = $state('');
+	let repoExcludeText = $state('');
+	let repoFilterError = $state('');
 	let pollingIntervalMs = $state(600000);
 	let selectedPollingValue = $state(600000);
 	let customMinutes = $state(10);
@@ -100,6 +104,8 @@
 		isTokenInvalid = provider?.isTokenInvalid ?? false;
 		jiraUrl = sanitizeJiraUrl(currentSettings.jiraBaseUrl || '');
 		linearWorkspace = currentSettings.linearWorkspace || '';
+		repoIncludeText = currentSettings.repoInclude.join('\n');
+		repoExcludeText = currentSettings.repoExclude.join('\n');
 		pollingIntervalMs = currentSettings.pollingIntervalMs ?? 600000;
 		if (PRESET_POLLING_VALUES.has(pollingIntervalMs)) {
 			selectedPollingValue = pollingIntervalMs;
@@ -216,6 +222,36 @@
 		jiraUrlError = '';
 		jiraUrl = committed;
 		await updateSetting('jiraBaseUrl', committed);
+	}
+
+	// Both boxes are checked together: one bad entry in either must not leave the pair half-saved.
+	async function saveRepoFilters() {
+		const include = parseRepoPatterns(repoIncludeText);
+		const exclude = parseRepoPatterns(repoExcludeText);
+		const invalid = [...include.invalid, ...exclude.invalid];
+		if (invalid.length > 0) {
+			repoFilterError = `Not a repository pattern: ${invalid.join(', ')}. Use owner/repo with * as a wildcard.`;
+			return;
+		}
+
+		repoFilterError = '';
+		repoIncludeText = include.patterns.join('\n');
+		repoExcludeText = exclude.patterns.join('\n');
+		const same = (left: string[], right: string[]) => left.join('\n') === right.join('\n');
+		if (same(include.patterns, currentSettings.repoInclude) && same(exclude.patterns, currentSettings.repoExclude)) {
+			return;
+		}
+
+		const patch = { repoInclude: include.patterns, repoExclude: exclude.patterns };
+		currentSettings = { ...currentSettings, ...patch };
+		await storage.setSettings(patch);
+		await runtimeSendMessage({ type: 'SETTINGS_CHANGED', settings: patch });
+		flashSaved();
+	}
+
+	async function updateRepoFilterEnabled(enabled: boolean) {
+		await updateSetting('repoFilterEnabled', enabled);
+		await runtimeSendMessage({ type: 'SETTINGS_CHANGED', settings: { repoFilterEnabled: enabled } });
 	}
 
 	async function saveLinearWorkspace() {
@@ -434,6 +470,41 @@
 						<p class="desc">Enter any Jira URL and PR Pulse will normalize it to the base workspace URL.</p>
 					{/if}
 				{/if}
+			</div>
+		</SectionCard>
+
+		<SectionCard>
+			<div class="section-row">
+				<div class="step-icon">
+					<FolderGit2 class="h-5 w-5" />
+				</div>
+				<div>
+					<h2 class="card-title">Repositories</h2>
+					<p class="desc">Limit the dashboard and badge to the repositories you care about. Notifications are not affected.</p>
+				</div>
+			</div>
+			<div class="space-y-3">
+				<div class="grid-2">
+					<label class="space-y-1.5">
+						<span class="label-title">Include</span>
+						<textarea class="field-input font-mono" rows="4" spellcheck="false" bind:value={repoIncludeText} onblur={saveRepoFilters} placeholder="acme/*&#10;foo-*/bar-*"></textarea>
+						<span class="desc block">Empty includes every repository.</span>
+					</label>
+					<label class="space-y-1.5">
+						<span class="label-title">Exclude</span>
+						<textarea class="field-input font-mono" rows="4" spellcheck="false" bind:value={repoExcludeText} onblur={saveRepoFilters} placeholder="acme/legacy-*&#10;*/dotfiles"></textarea>
+						<span class="desc block">Applied after the include list.</span>
+					</label>
+				</div>
+				{#if repoFilterError}
+					<p class="text-sm text-(--danger)">{repoFilterError}</p>
+				{:else}
+					<p class="desc">One <code>owner/repo</code> pattern per line. <code>*</code> matches any characters within the owner or the repository name: <code>acme/*</code> is everything in acme, <code>foo-*/bar-*</code> is every <code>bar-</code> repository in every <code>foo-</code> owner. A bare <code>acme</code> means <code>acme/*</code>.</p>
+				{/if}
+				<label class="flex cursor-pointer items-center gap-2 text-sm">
+					<input type="checkbox" class="rounded border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" checked={currentSettings.repoFilterEnabled} onchange={(event) => updateRepoFilterEnabled(event.currentTarget.checked)} />
+					<span>Apply these lists. The same switch is the "Repo filter" checkbox above the PR list.</span>
+				</label>
 			</div>
 		</SectionCard>
 

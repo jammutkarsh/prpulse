@@ -20,6 +20,7 @@
 	import { storage } from '../../lib/storage';
 	import type { PopupFilters, PopupTab, PullRequest, PullRequestData, Settings, SyncStatus } from '../../lib/types';
 	import { createPopupSession, type PopupState } from '../../lib/popup-session';
+	import { applyRepoFilter, hasRepoRules } from '../../lib/repo-filter';
 	import { createDefaultFilters, createPrView, groupByRepo, sameFilters, sortPullRequests } from '../../lib/pr-view';
 	import {
 		copyToClipboard,
@@ -217,9 +218,15 @@
 	let sync = $derived(popup.sync);
 	let syncing = $derived(refreshInProgress || sync !== null);
 
-	let currentItems = $derived(currentTab === 'myPRs' ? prData.myPRs || [] : prData.reviewRequests || []);
-	let myPrCount = $derived(prData.myPRs?.length || 0);
-	let reviewCount = $derived(prData.reviewRequests?.length || 0);
+	// The repository lists from settings come first: the counts, the filter options and the list all
+	// describe what is left, and only the toolbar's checkbox knows anything was held back.
+	let myItems = $derived(applyRepoFilter(prData.myPRs || [], settings));
+	let reviewItems = $derived(applyRepoFilter(prData.reviewRequests || [], settings));
+	let tabTotal = $derived((currentTab === 'myPRs' ? prData.myPRs : prData.reviewRequests)?.length || 0);
+	let currentItems = $derived(currentTab === 'myPRs' ? myItems : reviewItems);
+	let myPrCount = $derived(myItems.length);
+	let reviewCount = $derived(reviewItems.length);
+	let repoHiddenCount = $derived(tabTotal - currentItems.length);
 	let syncText = $derived(sync && sync.total > 0 ? `Syncing… ${Math.min(sync.loaded, sync.total)} of ${sync.total} PRs` : 'Syncing…');
 	let lastUpdatedText = $derived(
 		syncing ? syncText : prData.lastFetched ? `Updated ${formatRelativeTime(prData.lastFetched)}` : 'Waiting for first sync',
@@ -233,6 +240,8 @@
 	let filterCount = $derived(view.filterCount);
 	let filterActive = $derived(filterCount > 0);
 	let showSearchControls = $derived(!loading && !setupRequired && currentItems.length > 0);
+	// Stays up when the repository lists hide everything, so the checkbox that undoes it is reachable.
+	let showListToolbar = $derived(!loading && !setupRequired && tabTotal > 0);
 	let showTabToggle = $derived(!loading && !setupRequired);
 	let askNotifications = $derived(!loading && !setupRequired && settings.notificationsEnabled === null);
 	let searchActive = $derived(isSearchOpen || searchQuery.trim().length > 0);
@@ -290,10 +299,14 @@
 				</div>
 			{/if}
 
-			{#if showSearchControls}
+			{#if showListToolbar}
 				<ListToolbar
 					groupByRepo={settings.groupByRepo}
 					sortBy={settings.sortBy}
+					hasRepoRules={hasRepoRules(settings)}
+					repoFilterEnabled={settings.repoFilterEnabled}
+					hiddenCount={repoHiddenCount}
+					onRepoFilterChange={(repoFilterEnabled) => void session.updateSettings({ repoFilterEnabled })}
 					onGroupByRepoChange={(groupByRepo) => void session.updateSettings({ groupByRepo })}
 					onSortChange={(sortBy) => void session.updateSettings({ sortBy })}
 				/>
@@ -317,6 +330,11 @@
 			<div class={`px-4 ${showSearchControls ? 'pb-3 pt-3' : 'py-3'} sm:px-4 ${isFullpageMode ? 'min-h-[70vh]' : 'min-h-0 flex-1 overflow-auto'}`}>
 				{#if loading}
 					<div class="flex min-h-50 items-center justify-center desc">Loading PRs...</div>
+				{:else if !setupRequired && currentItems.length === 0 && repoHiddenCount > 0}
+					<div class="py-8 text-center text-soft">
+						<p>{repoHiddenCount === 1 ? 'The only PR here is' : `All ${repoHiddenCount} PRs here are`} hidden by your repository filter.</p>
+						<button class="mt-2 text-sm text-(--accent) hover:underline" onclick={() => void session.updateSettings({ repoFilterEnabled: false })}>Show all repositories</button>
+					</div>
 				{:else if setupRequired || currentItems.length === 0}
 					<PopupStates
 						{setupRequired}
