@@ -211,6 +211,14 @@ export function createPopupSession({
 		});
 	}
 
+	/**
+	 * Settings written somewhere else — the settings page, usually — while this surface stays open.
+	 * A popup is reopened before that can matter; a docked sidebar would otherwise show the old lists.
+	 */
+	function applySettings(settings: Settings): void {
+		set({ settings });
+	}
+
 	/** A fresh write from the worker: whatever was not on screen when the popup opened counts as new. */
 	function applyPullRequests(pullRequests: PullRequestData): void {
 		// A partial first-sync list has no baseline: everything past page one would read as new.
@@ -270,6 +278,7 @@ export function createPopupSession({
 		setFilters,
 		setNotifications,
 		updateSettings,
+		applySettings,
 		applyPullRequests,
 		applySyncStatus,
 		reload,

@@ -3,6 +3,7 @@ import { activeSync, createPopupSession, onboardingSyncLabel, STALE_SYNC_MS, TOK
 import { createMemoryStore, createStorage } from './storage-core';
 import { createDefaultFiltersByTab } from './pr-view';
 import type { PullRequest, RuntimeMessage } from './types';
+import { normalizeSettings } from './ui-config';
 
 // The popup's bootstrap order, its new-PR count and its filter writes used to live in a .svelte file,
 // out of reach. They run here over the in-memory adapter instead. Run with: npm test
@@ -221,6 +222,21 @@ async function testViewSettingsStick(): Promise<void> {
 	assert.equal(stored.pinnedTab, 'myPRs');
 }
 
+// A docked sidebar outlives edits made on the settings page; what it shows has to follow them.
+async function testOutsideSettingsChangeIsApplied(): Promise<void> {
+	const { session, sent } = sessionOver({ provider: connectedProvider });
+	await session.open();
+	const seen: boolean[] = [];
+	session.subscribe((next) => seen.push(next.settings.repoFilterEnabled));
+
+	session.applySettings(normalizeSettings({ repoFilterEnabled: false, repoExclude: ['acme/*'] }));
+
+	assert.deepEqual(seen, [false]);
+	assert.deepEqual(session.getState().settings.repoExclude, ['acme/*']);
+	// It only mirrors a write that already happened: nothing is stored or announced again.
+	assert.deepEqual(sent, []);
+}
+
 async function testRefreshBlockedBeforeSetup(): Promise<void> {
 	const { session, sent } = sessionOver({});
 	await session.open();
@@ -268,6 +284,7 @@ testOnboardingSyncLabel();
 await testRefreshSurfacesDeadToken();
 await testNotificationAnswerSticks();
 await testViewSettingsStick();
+await testOutsideSettingsChangeIsApplied();
 await testDeclinedPermissionStoresOff();
 await testRefreshBlockedBeforeSetup();
 console.log('popup-session: all checks passed');

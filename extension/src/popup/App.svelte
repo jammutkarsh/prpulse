@@ -21,7 +21,7 @@
 	import { storage } from '../../lib/storage';
 	import type { PopupFilters, PopupTab, PullRequest, PullRequestData, Settings, SyncStatus } from '../../lib/types';
 	import { createPopupSession, type PopupState } from '../../lib/popup-session';
-	import { DEFAULT_SETTINGS } from '../../lib/ui-config';
+	import { DEFAULT_SETTINGS, normalizeSettings } from '../../lib/ui-config';
 	import type { PopupSize } from '../../lib/popup-size';
 	import { applyRepoFilter, hasRepoRules } from '../../lib/repo-filter';
 	import { createDefaultFilters, createPrView, groupByRepo, sameFilters, sortPullRequests } from '../../lib/pr-view';
@@ -102,6 +102,10 @@
 		if (areaName !== 'local') return;
 		if (changes.syncStatus) {
 			session.applySyncStatus(changes.syncStatus.newValue as SyncStatus | undefined);
+		}
+		// A cleared key normalizes back to the defaults, same as the next open would read.
+		if (changes.settings) {
+			session.applySettings(normalizeSettings(changes.settings.newValue as Partial<Settings> | undefined));
 		}
 		if (changes.pullRequests?.newValue) {
 			session.applyPullRequests(changes.pullRequests.newValue as PullRequestData);
