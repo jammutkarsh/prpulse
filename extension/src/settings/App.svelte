@@ -7,7 +7,7 @@
 	import InteractiveGuide from '../lib/components/InteractiveGuide.svelte';
 	import AttributionFooter from '../lib/components/AttributionFooter.svelte';
 	import NotificationTest from '../lib/components/NotificationTest.svelte';
-	import { permissionsRequest, runtimeGetURL, runtimeSendMessage } from '../../lib/extension-api';
+	import { actionShortcut, permissionsRequest, runtimeGetURL, runtimeSendMessage, SHORTCUTS_PAGE_HINT } from '../../lib/extension-api';
 	import { storage } from '../../lib/storage';
 	import type { Settings, StoredProviderConfig } from '../../lib/types';
 	import { copyToClipboard } from '../../lib/utils';
@@ -39,6 +39,8 @@
 	let repoIncludeText = $state('');
 	let repoExcludeText = $state('');
 	let repoFilterError = $state('');
+	// What the browser has bound to the toolbar button right now; empty when a clash left it unset.
+	let shortcut = $state('');
 	let pollingIntervalMs = $state(600000);
 	let selectedPollingValue = $state(600000);
 	let customMinutes = $state(10);
@@ -115,6 +117,7 @@
 		}
 
 		void fetchTokenExpiration();
+		shortcut = await actionShortcut();
 	}
 
 	async function fetchTokenExpiration() {
@@ -563,6 +566,14 @@
 					<input type="checkbox" class="rounded border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" checked={currentSettings.groupByRepo} onchange={(event) => updateSetting('groupByRepo', event.currentTarget.checked)} />
 					<span>Group the PR list by repository.</span>
 				</label>
+				<p class="desc mt-3">
+					{#if shortcut}
+						<code>{shortcut}</code> does the same as the toolbar button.
+					{:else}
+						No keyboard shortcut is set for the toolbar button.
+					{/if}
+					Change it at <code>{SHORTCUTS_PAGE_HINT}</code>.
+				</p>
 			</SectionCard>
 		</div>
 

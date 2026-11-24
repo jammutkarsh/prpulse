@@ -175,12 +175,15 @@ async function applyDisplayMode(): Promise<void> {
 	const { displayMode } = await storage.getSettings();
 	const sidebar = displayMode === 'sidebar';
 	await actionSetPopup(sidebar ? '' : runtimeGetURL(POPUP_PATH));
-	await sidePanelSetOpenOnActionClick(sidebar);
+	// Never Chrome's own open-on-click: it would swallow the click that `sidebarToggle` needs.
+	await sidePanelSetOpenOnActionClick(false);
 }
 
 void applyDisplayMode().catch((error) => console.error('Failed to apply display mode:', error));
 
-// Only fires while the popup is removed, i.e. in sidebar mode. Chrome handles the click itself.
+// Only fires while the popup is removed, i.e. in sidebar mode. The keyboard shortcut is the
+// `_execute_action` command, which the browser treats as a click: with a popup set it opens the
+// popup, without one it lands here.
 actionOnClickedAddListener(sidebarToggle);
 
 async function updateBadge(count: number): Promise<void> {

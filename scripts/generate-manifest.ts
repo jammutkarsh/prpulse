@@ -27,6 +27,7 @@ type ExtensionManifest = {
 		  };
 	options_page: string;
 	icons: Record<string, string>;
+	commands: Record<string, { suggested_key: { default: string }; description: string }>;
 	/** Firefox's sidebar. */
 	sidebar_action?: {
 		default_panel: string;
@@ -85,6 +86,14 @@ const baseManifest = {
 	icons: {
 		'64': 'icons/icon48.png',
 		'128': 'icons/icon128.png',
+	},
+	commands: {
+		// The same as clicking the toolbar button, so it follows the display mode: it opens the popup or
+		// the full page, and toggles the sidebar. Ctrl/Cmd+Shift+P is Firefox's private window, hence Alt.
+		_execute_action: {
+			suggested_key: { default: 'Alt+Shift+P' },
+			description: 'Open or close PR Pulse',
+		},
 	},
 } satisfies Omit<ExtensionManifest, 'background'>;
 
