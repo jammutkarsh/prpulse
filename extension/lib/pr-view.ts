@@ -244,7 +244,7 @@ export interface RepoGroup {
 	items: PullRequest[];
 }
 
-/** Groups in repository-name order; the PRs inside each keep the order they arrived in. */
+/** Groups in the order their first PR appears, so the chosen sort orders the groups too. */
 export function groupByRepo(items: PullRequest[]): RepoGroup[] {
 	const groups = new Map<string, PullRequest[]>();
 	for (const pr of items) {
@@ -252,7 +252,7 @@ export function groupByRepo(items: PullRequest[]): RepoGroup[] {
 		groups.set(repo, [...(groups.get(repo) ?? []), pr]);
 	}
 
-	return Array.from(groups, ([repo, grouped]) => ({ repo, items: grouped })).sort((left, right) => byText(left.repo, right.repo));
+	return Array.from(groups, ([repo, grouped]) => ({ repo, items: grouped }));
 }
 
 export function countActiveFilters(filters: PopupFilters, tab: PopupTab): number {

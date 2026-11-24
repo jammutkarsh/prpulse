@@ -292,16 +292,25 @@ function testSortAndGroup(): void {
 	assert.equal(ids(list), 'abcd');
 	assert.equal(ids(sortPullRequests(list, 'bogus' as never)), 'abcd');
 
-	// Groups come out in repo order whatever the list order; items inside keep the list order.
-	const groups = groupByRepo(sortPullRequests(list, 'newest'));
-	assert.deepEqual(
-		groups.map((group) => [group.repo, ids(group.items)]),
-		[
-			['acme/api', 'cb'],
-			['acme/web', 'd'],
-			['zeta/web', 'a'],
-		],
-	);
+	// A group sits where its first PR falls under the sort; items inside keep the list order.
+	const grouped = (sortBy: Parameters<typeof sortPullRequests>[1]) =>
+		groupByRepo(sortPullRequests(list, sortBy)).map((group) => [group.repo, ids(group.items)]);
+	assert.deepEqual(grouped('newest'), [
+		['zeta/web', 'a'],
+		['acme/api', 'cb'],
+		['acme/web', 'd'],
+	]);
+	assert.deepEqual(grouped('oldest'), [
+		['acme/api', 'bc'],
+		['acme/web', 'd'],
+		['zeta/web', 'a'],
+	]);
+	// Sorting by repository is what gives A to Z groups.
+	assert.deepEqual(grouped('repo'), [
+		['acme/api', 'bc'],
+		['acme/web', 'd'],
+		['zeta/web', 'a'],
+	]);
 	assert.deepEqual(groupByRepo([]), []);
 }
 
