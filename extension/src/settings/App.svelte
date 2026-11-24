@@ -481,7 +481,7 @@
 					<FolderGit2 class="h-5 w-5" />
 				</div>
 				<div>
-					<h2 class="card-title">Repositories</h2>
+					<h2 class="card-title">Repository Filters</h2>
 					<p class="desc">Limit the dashboard and badge to the repositories you care about. Notifications are not affected.</p>
 				</div>
 			</div>
@@ -500,12 +500,10 @@
 				</div>
 				{#if repoFilterError}
 					<p class="text-sm text-(--danger)">{repoFilterError}</p>
-				{:else}
-					<p class="desc">One <code>owner/repo</code> pattern per line. <code>*</code> matches any characters within the owner or the repository name: <code>acme/*</code> is everything in acme, <code>foo-*/bar-*</code> is every <code>bar-</code> repository in every <code>foo-</code> owner. A bare <code>acme</code> means <code>acme/*</code>.</p>
 				{/if}
 				<label class="flex cursor-pointer items-center gap-2 text-sm">
 					<input type="checkbox" class="rounded border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" checked={currentSettings.repoFilterEnabled} onchange={(event) => updateRepoFilterEnabled(event.currentTarget.checked)} />
-					<span>Apply these lists. The same switch is the "Repo filter" checkbox above the PR list.</span>
+					<span>Filter PRs using these lists. Also toggled by "Repo filter" above the PR list.</span>
 				</label>
 			</div>
 		</SectionCard>
@@ -561,6 +559,10 @@
 					<RadioCard name="displayMode" value="fullpage" currentValue={currentSettings.displayMode || 'popup'} title="Full Page" description="Use a larger tab surface for denser layouts" iconComponent={Expand} onchange={updateDisplayMode} />
 					<RadioCard name="displayMode" value="sidebar" currentValue={currentSettings.displayMode || 'popup'} title="Sidebar" description="Dock the dashboard beside the page at full window height. The toolbar button opens and closes it." iconComponent={PanelRight} onchange={updateDisplayMode} />
 				</div>
+				<label class="mt-3 flex cursor-pointer items-center gap-2 text-sm">
+					<input type="checkbox" class="rounded border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" checked={currentSettings.groupByRepo} onchange={(event) => updateSetting('groupByRepo', event.currentTarget.checked)} />
+					<span>Group the PR list by repository.</span>
+				</label>
 			</SectionCard>
 		</div>
 

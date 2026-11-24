@@ -335,13 +335,11 @@
 
 			{#if showListToolbar}
 				<ListToolbar
-					groupByRepo={settings.groupByRepo}
 					sortBy={settings.sortBy}
 					hasRepoRules={hasRepoRules(settings)}
 					repoFilterEnabled={settings.repoFilterEnabled}
 					hiddenCount={repoHiddenCount}
 					onRepoFilterChange={(repoFilterEnabled) => void session.updateSettings({ repoFilterEnabled })}
-					onGroupByRepoChange={(groupByRepo) => void session.updateSettings({ groupByRepo })}
 					onSortChange={(sortBy) => void session.updateSettings({ sortBy })}
 				/>
 			{/if}
