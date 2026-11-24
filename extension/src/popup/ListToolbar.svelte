@@ -18,7 +18,7 @@
 
 	let {
 		groupByRepo = false,
-		sortBy = 'updated',
+		sortBy = 'default',
 		hasRepoRules = false,
 		repoFilterEnabled = true,
 		hiddenCount = 0,

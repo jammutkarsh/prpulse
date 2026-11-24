@@ -139,7 +139,7 @@ export interface Settings {
 	/** Show the list under one heading per repository. */
 	groupByRepo: boolean;
 	/** Order of the list, and of the PRs inside each group when grouped. */
-	sortBy: 'updated' | 'newest' | 'oldest' | 'repo' | 'title';
+	sortBy: 'default' | 'updated' | 'newest' | 'oldest' | 'repo' | 'title';
 	badgeCountMode: 'total' | 'filters';
 	/** `null` means never asked. The popup prompts on that, and stores the answer either way so it asks once. */
 	notificationsEnabled: boolean | null;

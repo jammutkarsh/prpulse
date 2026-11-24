@@ -205,6 +205,7 @@ function searchItems(items: PullRequest[], query: string): PullRequest[] {
 export type PrSort = Settings['sortBy'];
 
 export const PR_SORT_OPTIONS: ReadonlyArray<{ value: PrSort; label: string }> = [
+	{ value: 'default', label: 'Pending first' },
 	{ value: 'updated', label: 'Recently updated' },
 	{ value: 'newest', label: 'Newest' },
 	{ value: 'oldest', label: 'Oldest' },
@@ -217,7 +218,11 @@ function byTimeDesc(left: string | undefined, right: string | undefined): number
 	return (right || '').localeCompare(left || '');
 }
 
-const SORT_COMPARATORS: Record<PrSort, (left: PullRequest, right: PullRequest) => number> = {
+/**
+ * `default` has no comparator on purpose: it is the order the provider returned. For To Review that
+ * is requests still waiting first, then the PRs already reviewed; for My PRs it is most recently updated.
+ */
+const SORT_COMPARATORS: Record<Exclude<PrSort, 'default'>, (left: PullRequest, right: PullRequest) => number> = {
 	updated: (left, right) => byTimeDesc(left.updatedAt, right.updatedAt),
 	newest: (left, right) => byTimeDesc(left.createdAt, right.createdAt),
 	oldest: (left, right) => byTimeDesc(right.createdAt, left.createdAt),
@@ -225,9 +230,13 @@ const SORT_COMPARATORS: Record<PrSort, (left: PullRequest, right: PullRequest) =
 	title: (left, right) => byText(left.title || '', right.title || ''),
 };
 
-/** A sorted copy. The sort is stable, so ties keep the order the source returned them in. */
+/**
+ * A sorted copy. The sort is stable, so ties keep the order the source returned them in, and so does
+ * `default` or any value storage should never hold.
+ */
 export function sortPullRequests(items: PullRequest[], sortBy: PrSort): PullRequest[] {
-	return [...items].sort(SORT_COMPARATORS[sortBy] ?? SORT_COMPARATORS.updated);
+	const comparator = sortBy === 'default' ? undefined : SORT_COMPARATORS[sortBy];
+	return comparator ? [...items].sort(comparator) : [...items];
 }
 
 export interface RepoGroup {

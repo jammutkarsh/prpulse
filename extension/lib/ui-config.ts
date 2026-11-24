@@ -24,7 +24,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	repoInclude: [],
 	repoExclude: [],
 	groupByRepo: false,
-	sortBy: 'updated',
+	sortBy: 'default',
 	badgeCountMode: 'total',
 	notificationsEnabled: null,
 	groupNotifications: false,

@@ -12,6 +12,7 @@ import {
 	switchTab,
 } from './pr-view';
 import type { PullRequest } from './types';
+import { DEFAULT_SETTINGS } from './ui-config';
 
 // This module is the one place the popup, the website demo and the badge agree on what "shown" and
 // "filtered" mean. When they each had their own copy the counts diverged, so the rules get a check.
@@ -277,6 +278,10 @@ function testSortAndGroup(): void {
 	];
 	const ids = (sorted: PullRequest[]) => sorted.map((item) => item.id).join('');
 
+	// The default is the provider's order, which for To Review puts pending requests first.
+	assert.equal(DEFAULT_SETTINGS.sortBy, 'default');
+	assert.equal(ids(sortPullRequests(list, 'default')), 'abcd');
+	assert.notEqual(sortPullRequests(list, 'default'), list);
 	assert.equal(ids(sortPullRequests(list, 'updated')), 'bcda');
 	assert.equal(ids(sortPullRequests(list, 'newest')), 'acdb');
 	assert.equal(ids(sortPullRequests(list, 'oldest')), 'bcda');
@@ -285,7 +290,7 @@ function testSortAndGroup(): void {
 	assert.equal(ids(sortPullRequests(list, 'repo')), 'bcda');
 	// The caller's array is left alone, and a value storage should never hold still sorts.
 	assert.equal(ids(list), 'abcd');
-	assert.equal(ids(sortPullRequests(list, 'bogus' as never)), 'bcda');
+	assert.equal(ids(sortPullRequests(list, 'bogus' as never)), 'abcd');
 
 	// Groups come out in repo order whatever the list order; items inside keep the list order.
 	const groups = groupByRepo(sortPullRequests(list, 'newest'));
