@@ -1,6 +1,7 @@
 import Fuse from 'fuse.js';
 import { jiraTicketFor } from './jira';
 import { applyRepoFilter, type RepoFilterSettings } from './repo-filter';
+import { DEFAULT_SETTINGS } from './ui-config';
 import type {
 	FiltersByTab,
 	PopupAuthorFilterOption,
@@ -343,7 +344,7 @@ export function badgeCount(
 ): number {
 	// The repository lists are configuration, not a popup filter: they narrow the total in both modes.
 	const items = applyRepoFilter((settings.pinnedTab === 'myPRs' ? data.myPRs : data.reviewRequests) || [], {
-		repoFilterEnabled: settings.repoFilterEnabled ?? false,
+		repoFilterEnabled: settings.repoFilterEnabled ?? DEFAULT_SETTINGS.repoFilterEnabled,
 		repoInclude: settings.repoInclude ?? [],
 		repoExclude: settings.repoExclude ?? [],
 	});

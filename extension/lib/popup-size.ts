@@ -1,6 +1,8 @@
 // How big the toolbar popup may be. Pure so the rules can be checked in node; the resize handles
 // only feed it pointer positions and the screen's numbers.
 
+import { DEFAULT_SETTINGS } from './ui-config';
+
 export interface PopupSize {
 	width: number;
 	height: number;
@@ -11,6 +13,9 @@ export interface PopupSize {
  * 800×600 and clip whatever is drawn past that, so a taller frame would lose its footer.
  */
 export const POPUP_LIMITS = { minWidth: 360, minHeight: 320, maxWidth: 800, maxHeight: 600 } as const;
+
+/** The stock width, for a stored size that cannot be read. The config is in rem; 16px is the browser default. */
+export const DEFAULT_POPUP_WIDTH = DEFAULT_SETTINGS.ui.popupWidthRem * 16;
 
 /** Gap kept between the popup's bottom edge and the end of the usable screen. */
 const SCREEN_MARGIN = 8;
@@ -41,7 +46,7 @@ function clamp(value: number, min: number, max: number, fallback: number): numbe
 /** The nearest allowed size. The minimum wins over a screen too short to honour it. */
 export function clampPopupSize(size: PopupSize, availableHeight: number = POPUP_LIMITS.maxHeight): PopupSize {
 	return {
-		width: clamp(size.width, POPUP_LIMITS.minWidth, POPUP_LIMITS.maxWidth, POPUP_LIMITS.minWidth),
+		width: clamp(size.width, POPUP_LIMITS.minWidth, POPUP_LIMITS.maxWidth, DEFAULT_POPUP_WIDTH),
 		height: clamp(size.height, POPUP_LIMITS.minHeight, Math.min(POPUP_LIMITS.maxHeight, availableHeight), POPUP_LIMITS.maxHeight),
 	};
 }

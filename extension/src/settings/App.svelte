@@ -13,7 +13,7 @@
 	import { copyToClipboard } from '../../lib/utils';
 	import { commitJiraUrl, jiraDashboardUrlFor, sanitizeJiraUrl } from '../../lib/jira';
 	import { commitLinearWorkspace, linearDashboardUrlFor } from '../../lib/linear';
-	import { parseRepoPatterns } from '../../lib/repo-filter';
+	import { MAX_WILDCARDS_PER_NAME, parseRepoPatterns } from '../../lib/repo-filter';
 	import { commitProvider, connectGithubToken, refreshTokenExpiration } from '../../lib/github-connect';
 	import { DEFAULT_SETTINGS } from '../../lib/ui-config';
 
@@ -232,7 +232,7 @@
 		const exclude = parseRepoPatterns(repoExcludeText);
 		const invalid = [...include.invalid, ...exclude.invalid];
 		if (invalid.length > 0) {
-			repoFilterError = `Not a repository pattern: ${invalid.join(', ')}. Use owner/repo with * as a wildcard.`;
+			repoFilterError = `Not a repository pattern: ${invalid.join(', ')}. Use owner/repo with * as a wildcard, at most ${MAX_WILDCARDS_PER_NAME} in each name.`;
 			return;
 		}
 

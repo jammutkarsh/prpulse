@@ -9,8 +9,23 @@ export type RepoFilterSettings = Pick<Settings, 'repoFilterEnabled' | 'repoInclu
 /** `owner/repo`, or a bare `owner`. `*` is the only wildcard; every other character is literal. */
 const PATTERN_SHAPE = /^[\w.*-]+(\/[\w.*-]+)?$/;
 
+/**
+ * Each `*` is a place the matcher may have to back up to, and the cost multiplies: nine in one name
+ * took hundreds of milliseconds against a single repository. Three covers `*-api-*` and the like.
+ */
+export const MAX_WILDCARDS_PER_NAME = 3;
+
+/** `**` matches exactly what `*` does, so a run counts, and compiles, as one. */
+function collapseWildcards(pattern: string): string {
+	return pattern.replace(/\*{2,}/g, '*');
+}
+
 export function isValidRepoPattern(pattern: string): boolean {
-	return PATTERN_SHAPE.test(pattern);
+	if (!PATTERN_SHAPE.test(pattern)) return false;
+
+	return collapseWildcards(pattern)
+		.split('/')
+		.every((name) => name.split('*').length - 1 <= MAX_WILDCARDS_PER_NAME);
 }
 
 /**
@@ -39,7 +54,8 @@ function compile(pattern: string): RegExp | null {
 	const trimmed = pattern.trim();
 	if (!isValidRepoPattern(trimmed)) return null;
 
-	const full = trimmed.includes('/') ? trimmed : `${trimmed}/*`;
+	const collapsed = collapseWildcards(trimmed);
+	const full = collapsed.includes('/') ? collapsed : `${collapsed}/*`;
 	return new RegExp(`^${full.split('*').map(escapeRegExp).join('[^/]*')}$`, 'i');
 }
 

@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { POPUP_PATH, SIDEBAR_PATH } from '../extension/lib/dashboard-paths';
 
 type BrowserTarget = 'chrome' | 'firefox';
 
@@ -74,7 +75,7 @@ const baseManifest = {
 	optional_permissions: ['notifications'],
 	host_permissions: ['https://api.github.com/*'],
 	action: {
-		default_popup: 'popup/popup.html',
+		default_popup: POPUP_PATH,
 		default_icon: {
 			'64': 'icons/icon48.png',
 			'128': 'icons/icon128.png',
@@ -86,9 +87,6 @@ const baseManifest = {
 		'128': 'icons/icon128.png',
 	},
 } satisfies Omit<ExtensionManifest, 'background'>;
-
-// Must match SIDEBAR_PATH in extension/lib/extension-api.ts: the query string tells the page it is docked.
-const SIDEBAR_PATH = 'popup/popup.html?sidebar=1';
 
 const manifest = createManifest(browser, baseManifest);
 const resolvedOutputPath = resolve(process.cwd(), outputPath);

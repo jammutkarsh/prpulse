@@ -262,9 +262,12 @@
 	let reviewCount = $derived(reviewItems.length);
 	let repoHiddenCount = $derived(tabTotal - currentItems.length);
 	let syncText = $derived(sync && sync.total > 0 ? `Syncing… ${Math.min(sync.loaded, sync.total)} of ${sync.total} PRs` : 'Syncing…');
-	let lastUpdatedText = $derived(
-		syncing ? syncText : prData.lastFetched && clock >= 0 ? `Updated ${formatRelativeTime(prData.lastFetched)}` : 'Waiting for first sync',
-	);
+	let lastUpdatedText = $derived.by(() => {
+		// Read only to re-run on the tick: the relative time goes stale without it.
+		void clock;
+		if (syncing) return syncText;
+		return prData.lastFetched ? `Updated ${formatRelativeTime(prData.lastFetched)}` : 'Waiting for first sync';
+	});
 	let fullpageShellClasses = $derived(isFullpageMode ? 'w-full max-w-[80rem]' : 'h-full');
 	let cardListClasses = $derived(isFullpageMode ? 'grid gap-3 xl:grid-cols-2' : 'popup-card-grid pr-1 scroll-thin');
 	let view = $derived(createPrView(currentItems, activeFilters, searchQuery, currentTab));

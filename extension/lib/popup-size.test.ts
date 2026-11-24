@@ -15,7 +15,8 @@ function testClamp(): void {
 	// ...but never below the minimum, even if the screen says there is less room than that.
 	assert.equal(clampPopupSize({ width: 448, height: 600 }, 100).height, POPUP_LIMITS.minHeight);
 
-	assert.deepEqual(clampPopupSize({ width: Number.NaN, height: Number.NaN }), { width: POPUP_LIMITS.minWidth, height: 600 });
+	// An unreadable size falls back to the stock width, not the narrowest one.
+	assert.deepEqual(clampPopupSize({ width: Number.NaN, height: Number.NaN }), { width: 448, height: 600 });
 	assert.deepEqual(clampPopupSize({ width: 448.6, height: 500.4 }), { width: 449, height: 500 });
 }
 

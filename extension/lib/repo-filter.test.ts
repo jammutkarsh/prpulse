@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { applyRepoFilter, hasRepoRules, matchesRepoPattern, parseRepoPatterns } from './repo-filter';
+import { applyRepoFilter, hasRepoRules, isValidRepoPattern, matchesRepoPattern, parseRepoPatterns } from './repo-filter';
 
 // The include/exclude lists decide what the whole dashboard is about. Run with: npm test
 
@@ -30,6 +30,24 @@ function testGlobs(): void {
 	assert.equal(matchesRepoPattern('acme/api', ''), false);
 	assert.equal(matchesRepoPattern('acme/api', 'acme/api/extra'), false);
 	assert.equal(matchesRepoPattern('acme/api', 'acme/(api|web)'), false);
+}
+
+// Every extra `*` multiplies the matcher's backtracking, so a name may only hold a few.
+function testWildcardLimit(): void {
+	assert.equal(isValidRepoPattern('*a*b*/*c*d*'), true);
+	assert.equal(isValidRepoPattern('acme/*a*a*a*c'), false);
+	assert.equal(matchesRepoPattern('acme/aaac', 'acme/*a*a*a*c'), false);
+	assert.deepEqual(parseRepoPatterns('acme/*a*a*a*c acme/*').invalid, ['acme/*a*a*a*c']);
+
+	// A run of stars is one wildcard, both for the limit and for the match.
+	assert.equal(isValidRepoPattern('acme/****api****'), true);
+	assert.equal(matchesRepoPattern('acme/my-api-v2', 'acme/**api**'), true);
+	assert.equal(matchesRepoPattern('acme/x/api', 'acme/**api'), false);
+
+	// The worst pattern still allowed, against a name that makes it try everything.
+	const started = performance.now();
+	assert.equal(matchesRepoPattern(`${'a'.repeat(100)}/${'a'.repeat(100)}`, '*a*a*c/*a*a*c'), false);
+	assert.ok(performance.now() - started < 100);
 }
 
 function testParse(): void {
@@ -71,6 +89,7 @@ function testApply(): void {
 }
 
 testGlobs();
+testWildcardLimit();
 testParse();
 testApply();
 console.log('repo-filter: all checks passed');
