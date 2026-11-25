@@ -55,10 +55,7 @@ function testDashboardUrl(): void {
 	assert.equal(jiraDashboardUrlFor('javascript:alert(1)'), '');
 
 	// A pasted dashboard link must not be doubled up.
-	assert.equal(
-		jiraDashboardUrlFor('https://example.com/jira/secure/Dashboard.jspa'),
-		'https://example.com/jira/secure/Dashboard.jspa',
-	);
+	assert.equal(jiraDashboardUrlFor('https://example.com/jira/secure/Dashboard.jspa'), 'https://example.com/jira/secure/Dashboard.jspa');
 }
 
 function testCommitJiraUrl(): void {

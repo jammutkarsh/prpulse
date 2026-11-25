@@ -142,7 +142,9 @@ export async function sidePanelSetOpenOnActionClick(open: boolean): Promise<void
 
 /** Where each browser lets the user rebind an extension's shortcuts. Neither page can be linked to. */
 export const SHORTCUTS_PAGE_HINT =
-	__BROWSER_TARGET__ === 'firefox' ? 'about:addons, then the gear menu, then Manage Extension Shortcuts' : 'chrome://extensions/shortcuts';
+	__BROWSER_TARGET__ === 'firefox'
+		? 'about:addons, then the gear menu, then Manage Extension Shortcuts'
+		: 'chrome://extensions/shortcuts';
 
 /** The key currently bound to the toolbar button, or an empty string when the user or a clash left it unset. */
 export async function actionShortcut(): Promise<string> {

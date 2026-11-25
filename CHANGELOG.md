@@ -2,6 +2,16 @@
 
 All notable changes to PR Pulse are documented in this file.
 
+## [2.4.0] – 2026-11-25
+
+- **Linear as an issue tracker**: Settings and onboarding offer a Jira/Linear choice, and branch-name tickets link to `linear.app/<workspace>/issue/<ID>`. Both trackers' values are kept, so switching back loses nothing.
+- **Group by repository and sort**: A Sort select above the list picks the order (pending first, recently updated, newest, oldest, repository, title), and a Settings checkbox groups the list under per-repository headings. Groups follow the chosen sort, and search results keep their relevance order.
+- **Repository include/exclude lists**: Settings take two lists of `owner/repo` patterns that narrow the PR list, tab counts and badge. `*` is the only wildcard and does not cross the slash; a bare `owner` means `owner/*`. Notifications are deliberately unaffected.
+- **Resizable popup**: Drag the bottom edge or corners to resize; double-click resets. The size is remembered and clamped to the room left on the display and to the 800×600 popup cap. A popup dragged wide enough lays cards out in two columns.
+- **Sidebar display mode**: A third Display Mode docks the dashboard in the browser's sidebar (Firefox `sidebar_action`, Chrome side panel), free of the popup size cap. The toolbar button toggles it.
+- **Keyboard shortcut**: `Alt+Shift+P` does what the toolbar button does in the current display mode, and Settings shows the current key and where to rebind it.
+- **Stays fresh while open**: The "Updated … ago" footer refreshes every 30 seconds, and an open dashboard follows settings changed elsewhere, since a docked sidebar stays open for hours.
+
 ## [2.3.0] – 2026-11-20
 
 - **Merge conflicts on PR cards**: PR cards now show merge conflicts, with a filter to list only conflicting PRs and a count of commits behind for each card.

@@ -75,7 +75,11 @@ function testApply(): void {
 	assert.deepEqual(names({ ...on, repoExclude: ['*/web'] }), ['acme/api', 'acme/legacy-api', 'me/dotfiles']);
 
 	// Include, then exclude: the exclude wins over a repo the include let in.
-	assert.deepEqual(names({ ...on, repoInclude: ['acme', 'globex/*'], repoExclude: ['acme/legacy-*'] }), ['acme/api', 'acme/web', 'globex/web']);
+	assert.deepEqual(names({ ...on, repoInclude: ['acme', 'globex/*'], repoExclude: ['acme/legacy-*'] }), [
+		'acme/api',
+		'acme/web',
+		'globex/web',
+	]);
 	assert.deepEqual(names({ ...on, repoInclude: ['acme/api'], repoExclude: ['acme/*'] }), []);
 
 	// Switched off from the list: rules stay configured but do nothing.

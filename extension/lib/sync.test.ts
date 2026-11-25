@@ -94,10 +94,20 @@ async function testSuccessClearsInvalidFlag(): Promise<void> {
 async function testSuccessKeepsProviderChangesMadeMidSync(): Promise<void> {
 	const { storage, deps } = setup(async () => {
 		// Settings refreshes the token's expiry while this sync is running.
-		await storage.setProvider({ type: 'github', token: 'a', isTokenInvalid: true, user: { login: 'ada', tokenExpiration: 'later' } } as never);
+		await storage.setProvider({
+			type: 'github',
+			token: 'a',
+			isTokenInvalid: true,
+			user: { login: 'ada', tokenExpiration: 'later' },
+		} as never);
 		return result('1');
 	});
-	await storage.setProvider({ type: 'github', token: 'a', isTokenInvalid: true, user: { login: 'ada', tokenExpiration: 'sooner' } } as never);
+	await storage.setProvider({
+		type: 'github',
+		token: 'a',
+		isTokenInvalid: true,
+		user: { login: 'ada', tokenExpiration: 'sooner' },
+	} as never);
 
 	await runSync(deps);
 	const provider = await storage.getProvider();
