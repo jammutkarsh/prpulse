@@ -201,6 +201,24 @@ export function createPopupSession({
 		return granted;
 	}
 
+	/** Settings changed from inside the popup. Shown at once, then written so the next open matches. */
+	async function updateSettings(patch: Partial<Settings>): Promise<void> {
+		set({ settings: { ...state.settings, ...patch } });
+		await storage.setSettings(patch);
+		// The worker owns the badge and decides which keys matter to it.
+		await sendMessage({ type: 'SETTINGS_CHANGED', settings: patch }).catch((error) => {
+			console.error('Failed to announce settings change:', error);
+		});
+	}
+
+	/**
+	 * Settings written somewhere else — the settings page, usually — while this surface stays open.
+	 * A popup is reopened before that can matter; a docked sidebar would otherwise show the old lists.
+	 */
+	function applySettings(settings: Settings): void {
+		set({ settings });
+	}
+
 	/** A fresh write from the worker: whatever was not on screen when the popup opened counts as new. */
 	function applyPullRequests(pullRequests: PullRequestData): void {
 		// A partial first-sync list has no baseline: everything past page one would read as new.
@@ -259,6 +277,8 @@ export function createPopupSession({
 		setTab,
 		setFilters,
 		setNotifications,
+		updateSettings,
+		applySettings,
 		applyPullRequests,
 		applySyncStatus,
 		reload,

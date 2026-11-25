@@ -66,6 +66,95 @@ export function tabsCreate(createProperties: browser.Tabs.CreateCreateProperties
 	return extensionBrowser.tabs.create(createProperties);
 }
 
+export { POPUP_PATH, SIDEBAR_PATH } from './dashboard-paths';
+
+/** An empty string removes the popup, which is what makes `action.onClicked` fire instead. */
+export function actionSetPopup(popup: string): Promise<void> {
+	return extensionBrowser.action.setPopup({ popup });
+}
+
+/**
+ * Deliberately not wrapped like the other listeners: opening a sidebar is only allowed inside the
+ * click's user gesture, so the listener has to run synchronously with nothing awaited in front of it.
+ * The keyboard shortcut (`_execute_action`) arrives here too, as if the button had been clicked.
+ */
+export function actionOnClickedAddListener(listener: (windowId: number | undefined) => void): void {
+	extensionBrowser.action.onClicked.addListener((tab) => listener(tab?.windowId));
+}
+
+/** The parts of Chrome's API used here that the polyfill's types do not cover. */
+interface ChromeSidePanelApi {
+	sidePanel?: {
+		setPanelBehavior(behavior: { openPanelOnActionClick: boolean }): Promise<void>;
+		open(options: { windowId: number }): Promise<void>;
+		/** Chrome 141+. */
+		close?(options: { windowId: number }): Promise<void>;
+	};
+	runtime?: {
+		getContexts(filter: { contextTypes: string[] }): Promise<Array<{ windowId: number }>>;
+	};
+}
+
+function chromeApi(): ChromeSidePanelApi | undefined {
+	return (globalThis as { chrome?: ChromeSidePanelApi }).chrome;
+}
+
+/**
+ * Opens the sidebar in this window, or closes it if it is already open. Must be called synchronously
+ * from a click or shortcut handler: both browsers refuse to open a sidebar outside a user gesture.
+ *
+ * Firefox has a toggle. Chrome has only open and close and no way to ask synchronously which is
+ * needed, so the question is asked first and `open` is sent right behind it without waiting: the
+ * answer describes the moment before the open, and an open on a panel that was already showing does
+ * nothing. If the answer says it was showing, it is closed.
+ */
+export function sidebarToggle(windowId: number | undefined): void {
+	const sidebarAction = (extensionBrowser as unknown as { sidebarAction?: { toggle(): Promise<void> } }).sidebarAction;
+	if (sidebarAction) {
+		void sidebarAction.toggle().catch((error) => logExtensionApiError('sidebarAction.toggle', error));
+		return;
+	}
+
+	const chrome = chromeApi();
+	const sidePanel = chrome?.sidePanel;
+	if (!sidePanel || windowId === undefined) return;
+
+	const openBefore = chrome.runtime?.getContexts({ contextTypes: ['SIDE_PANEL'] }) ?? Promise.resolve([]);
+	const opened = sidePanel.open({ windowId });
+
+	void Promise.all([openBefore, opened])
+		.then(([contexts]) => {
+			if (contexts.some((context) => context.windowId === windowId)) {
+				return sidePanel.close?.({ windowId });
+			}
+		})
+		.catch((error) => logExtensionApiError('sidePanel toggle', error));
+}
+
+/**
+ * Chrome can open the side panel on toolbar clicks by itself, but then the click never reaches the
+ * extension. It is kept switched off so clicks and the shortcut both go through `sidebarToggle`.
+ * Absent in Firefox, and outside the polyfill, hence the raw `chrome` global.
+ */
+export async function sidePanelSetOpenOnActionClick(open: boolean): Promise<void> {
+	await chromeApi()?.sidePanel?.setPanelBehavior({ openPanelOnActionClick: open });
+}
+
+/** Where each browser lets the user rebind an extension's shortcuts. Neither page can be linked to. */
+export const SHORTCUTS_PAGE_HINT =
+	__BROWSER_TARGET__ === 'firefox' ? 'about:addons, then the gear menu, then Manage Extension Shortcuts' : 'chrome://extensions/shortcuts';
+
+/** The key currently bound to the toolbar button, or an empty string when the user or a clash left it unset. */
+export async function actionShortcut(): Promise<string> {
+	try {
+		const commands = await extensionBrowser.commands.getAll();
+		return commands.find((command) => command.name === '_execute_action')?.shortcut || '';
+	} catch (error) {
+		logExtensionApiError('commands.getAll', error);
+		return '';
+	}
+}
+
 export function actionSetBadgeText(details: browser.Action.SetBadgeTextDetailsType): Promise<void> {
 	return extensionBrowser.action.setBadgeText(details);
 }

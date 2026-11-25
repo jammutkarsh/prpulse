@@ -1,7 +1,9 @@
 import { GitHubProvider } from './lib/providers/github-provider';
 import {
+	actionOnClickedAddListener,
 	actionSetBadgeBackgroundColor,
 	actionSetBadgeText,
+	actionSetPopup,
 	alarmsOnAlarmAddListener,
 	alarmsClear,
 	alarmsCreate,
@@ -12,10 +14,13 @@ import {
 	notificationsAvailable,
 	notificationsOnClickedAddListener,
 	permissionsOnAddedAddListener,
+	POPUP_PATH,
 	runtimeGetURL,
 	runtimeOnInstalledAddListener,
 	runtimeOnMessageAddListener,
 	runtimeOnStartupAddListener,
+	sidebarToggle,
+	sidePanelSetOpenOnActionClick,
 	tabsCreate,
 } from './lib/extension-api';
 import { onFiltersChanged, storage } from './lib/storage';
@@ -161,6 +166,26 @@ function registerNotificationListeners(): void {
 registerNotificationListeners();
 permissionsOnAddedAddListener(registerNotificationListeners);
 
+/**
+ * Points the toolbar button at what the display mode says it opens. In sidebar mode the popup is
+ * removed, because a button with a popup never reports its clicks. The browser forgets `setPopup`
+ * when it restarts, so this runs on every worker start, not only when the setting changes.
+ */
+async function applyDisplayMode(): Promise<void> {
+	const { displayMode } = await storage.getSettings();
+	const sidebar = displayMode === 'sidebar';
+	await actionSetPopup(sidebar ? '' : runtimeGetURL(POPUP_PATH));
+	// Never Chrome's own open-on-click: it would swallow the click that `sidebarToggle` needs.
+	await sidePanelSetOpenOnActionClick(false);
+}
+
+void applyDisplayMode().catch((error) => console.error('Failed to apply display mode:', error));
+
+// Only fires while the popup is removed, i.e. in sidebar mode. The keyboard shortcut is the
+// `_execute_action` command, which the browser treats as a click: with a popup set it opens the
+// popup, without one it lands here.
+actionOnClickedAddListener(sidebarToggle);
+
 async function updateBadge(count: number): Promise<void> {
 	const text = count > 0 ? String(count) : '';
 	await Promise.all([actionSetBadgeText({ text }), actionSetBadgeBackgroundColor({ color: '#238636' })]);
@@ -243,6 +268,8 @@ const messageHandlers: Record<RuntimeMessage['type'], (message: RuntimeMessage) 
 		// A switched account's cache was just cleared, so the badge must not keep the old count meanwhile.
 		await refreshBadge();
 		await setupPollingAlarm(true);
+		// Onboarding writes its display mode just before this message.
+		await applyDisplayMode();
 		void coordinator.syncAfterCurrent({ quietIfStale: true }).catch(() => undefined);
 		return { success: true };
 	},
@@ -263,11 +290,16 @@ const messageHandlers: Record<RuntimeMessage['type'], (message: RuntimeMessage) 
 	// ended up doing to the same value.
 	SETTINGS_CHANGED: async (message) => {
 		if ('settings' in message) {
+			if ('displayMode' in message.settings) {
+				await applyDisplayMode();
+			}
+
 			if ('pollingIntervalMs' in message.settings) {
 				await setupPollingAlarm(true);
 			}
 
-			if ('pinnedTab' in message.settings || 'badgeCountMode' in message.settings) {
+			const badgeKeys = ['pinnedTab', 'badgeCountMode', 'repoFilterEnabled', 'repoInclude', 'repoExclude'];
+			if (badgeKeys.some((key) => key in message.settings)) {
 				await refreshBadge();
 			}
 		}
@@ -276,6 +308,8 @@ const messageHandlers: Record<RuntimeMessage['type'], (message: RuntimeMessage) 
 	CLEAR_ALL: async () => {
 		await alarmsClear(ALARM_NAME);
 		await actionSetBadgeText({ text: '' });
+		// Storage is already empty, so this puts the popup back.
+		await applyDisplayMode();
 		return { success: true };
 	},
 };

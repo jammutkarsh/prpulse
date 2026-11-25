@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { POPUP_PATH, SIDEBAR_PATH } from '../extension/lib/dashboard-paths';
 
 type BrowserTarget = 'chrome' | 'firefox';
 
@@ -26,6 +27,16 @@ type ExtensionManifest = {
 		  };
 	options_page: string;
 	icons: Record<string, string>;
+	commands: Record<string, { suggested_key: { default: string }; description: string }>;
+	/** Firefox's sidebar. */
+	sidebar_action?: {
+		default_panel: string;
+		default_title: string;
+		default_icon: Record<string, string>;
+		open_at_install: boolean;
+	};
+	/** Chrome's side panel. */
+	side_panel?: { default_path: string };
 	browser_specific_settings?: {
 		gecko: {
 			id: string;
@@ -65,7 +76,7 @@ const baseManifest = {
 	optional_permissions: ['notifications'],
 	host_permissions: ['https://api.github.com/*'],
 	action: {
-		default_popup: 'popup/popup.html',
+		default_popup: POPUP_PATH,
 		default_icon: {
 			'64': 'icons/icon48.png',
 			'128': 'icons/icon128.png',
@@ -75,6 +86,14 @@ const baseManifest = {
 	icons: {
 		'64': 'icons/icon48.png',
 		'128': 'icons/icon128.png',
+	},
+	commands: {
+		// The same as clicking the toolbar button, so it follows the display mode: it opens the popup or
+		// the full page, and toggles the sidebar. Ctrl/Cmd+Shift+P is Firefox's private window, hence Alt.
+		_execute_action: {
+			suggested_key: { default: 'Alt+Shift+P' },
+			description: 'Open or close PR Pulse',
+		},
 	},
 } satisfies Omit<ExtensionManifest, 'background'>;
 
@@ -96,6 +115,13 @@ function createManifest(target: BrowserTarget, base: Omit<ExtensionManifest, 'ba
 				scripts: ['service-worker.js'],
 				type: 'module',
 			},
+			sidebar_action: {
+				default_panel: SIDEBAR_PATH,
+				default_title: 'PR Pulse',
+				default_icon: base.icons,
+				// Firefox opens a new sidebar on install unless told not to; the sidebar is opt-in here.
+				open_at_install: false,
+			},
 			browser_specific_settings: {
 				gecko: {
 					id: 'pr-pulse@utkarshchourasia.in',
@@ -112,6 +138,9 @@ function createManifest(target: BrowserTarget, base: Omit<ExtensionManifest, 'ba
 	// Optional but recommended for Chrome Web Store
 	return {
 		...base,
+		// `sidePanel` carries no install warning, so adding it does not disable existing installs.
+		permissions: [...base.permissions, 'sidePanel'],
+		side_panel: { default_path: SIDEBAR_PATH },
 		background: {
 			service_worker: 'service-worker.js',
 			type: 'module',

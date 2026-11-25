@@ -119,12 +119,27 @@ export interface UiConfig {
 }
 
 export interface Settings {
+	/** Which tracker branch-name tickets link to. Both trackers' values are kept, so switching back loses nothing. */
+	issueTracker: 'jira' | 'linear';
 	jiraBaseUrl: string;
-	displayMode: 'popup' | 'fullpage';
+	/** Linear workspace slug: the `acme` in `linear.app/acme`. */
+	linearWorkspace: string;
+	/** What a toolbar click opens. `sidebar` is the browser's own side panel, which the popup's 800×600 cap does not apply to. */
+	displayMode: 'popup' | 'fullpage' | 'sidebar';
 	pinnedTab: 'myPRs' | 'toReview';
 	visibleColumns: string[];
 	pollingIntervalMs: number;
 	persistFilters: boolean;
+	/** The popup's checkbox: whether `repoInclude`/`repoExclude` are applied. Off keeps the lists but shows everything. */
+	repoFilterEnabled: boolean;
+	/** `owner/repo` patterns with `*` wildcards. Empty means every repository is included. */
+	repoInclude: string[];
+	/** Applied after `repoInclude`, so an exclude always wins. */
+	repoExclude: string[];
+	/** Show the list under one heading per repository. */
+	groupByRepo: boolean;
+	/** Order of the list, and of the PRs inside each group when grouped. */
+	sortBy: 'default' | 'updated' | 'newest' | 'oldest' | 'repo' | 'title';
 	badgeCountMode: 'total' | 'filters';
 	/** `null` means never asked. The popup prompts on that, and stores the answer either way so it asks once. */
 	notificationsEnabled: boolean | null;

@@ -37,9 +37,57 @@
 	}
 
 	.popup-frame {
+		position: relative;
 		height: var(--popup-height);
 		width: var(--popup-width);
 		overflow: hidden;
+	}
+
+	/* Docked in the browser's sidebar: the browser owns the size, the frame just fills it. */
+	.popup-frame-fill {
+		height: 100vh;
+		width: 100%;
+	}
+
+	/* One column at the default width; a popup dragged wide enough gets a second. */
+	.popup-card-grid {
+		display: grid;
+		gap: 0.75rem;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+	}
+
+	.popup-resize-handle {
+		position: absolute;
+		bottom: 0;
+		z-index: 30;
+		touch-action: none;
+	}
+
+	.popup-resize-bottom {
+		left: 0.875rem;
+		right: 0.875rem;
+		height: 0.375rem;
+		cursor: ns-resize;
+	}
+
+	.popup-resize-corner {
+		height: 0.875rem;
+		width: 0.875rem;
+	}
+
+	.popup-resize-left {
+		left: 0;
+		cursor: nesw-resize;
+	}
+
+	.popup-resize-right {
+		right: 0;
+		cursor: nwse-resize;
+	}
+
+	.popup-resize-handle:hover,
+	.popup-resize-handle:active {
+		background: color-mix(in srgb, var(--accent) 45%, transparent);
 	}
 
 	.popup-frame .surface-card {

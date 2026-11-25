@@ -1,5 +1,7 @@
 import Fuse from 'fuse.js';
 import { jiraTicketFor } from './jira';
+import { applyRepoFilter, type RepoFilterSettings } from './repo-filter';
+import { DEFAULT_SETTINGS } from './ui-config';
 import type {
 	FiltersByTab,
 	PopupAuthorFilterOption,
@@ -201,6 +203,59 @@ function searchItems(items: PullRequest[], query: string): PullRequest[] {
 	return index.search(query).map(({ item: { _jiraTicket, ...pr } }) => pr);
 }
 
+export type PrSort = Settings['sortBy'];
+
+export const PR_SORT_OPTIONS: ReadonlyArray<{ value: PrSort; label: string }> = [
+	{ value: 'default', label: 'Pending first' },
+	{ value: 'updated', label: 'Recently updated' },
+	{ value: 'newest', label: 'Newest' },
+	{ value: 'oldest', label: 'Oldest' },
+	{ value: 'repo', label: 'Repository' },
+	{ value: 'title', label: 'Title' },
+];
+
+/** ISO 8601 timestamps order correctly as plain strings; a missing one sorts as oldest. */
+function byTimeDesc(left: string | undefined, right: string | undefined): number {
+	return (right || '').localeCompare(left || '');
+}
+
+/**
+ * `default` has no comparator on purpose: it is the order the provider returned. For To Review that
+ * is requests still waiting first, then the PRs already reviewed; for My PRs it is most recently updated.
+ */
+const SORT_COMPARATORS: Record<Exclude<PrSort, 'default'>, (left: PullRequest, right: PullRequest) => number> = {
+	updated: (left, right) => byTimeDesc(left.updatedAt, right.updatedAt),
+	newest: (left, right) => byTimeDesc(left.createdAt, right.createdAt),
+	oldest: (left, right) => byTimeDesc(right.createdAt, left.createdAt),
+	repo: (left, right) => byText(left.repoFullName || '', right.repoFullName || '') || byTimeDesc(left.updatedAt, right.updatedAt),
+	title: (left, right) => byText(left.title || '', right.title || ''),
+};
+
+/**
+ * A sorted copy. The sort is stable, so ties keep the order the source returned them in, and so does
+ * `default` or any value storage should never hold.
+ */
+export function sortPullRequests(items: PullRequest[], sortBy: PrSort): PullRequest[] {
+	const comparator = sortBy === 'default' ? undefined : SORT_COMPARATORS[sortBy];
+	return comparator ? [...items].sort(comparator) : [...items];
+}
+
+export interface RepoGroup {
+	repo: string;
+	items: PullRequest[];
+}
+
+/** Groups in the order their first PR appears, so the chosen sort orders the groups too. */
+export function groupByRepo(items: PullRequest[]): RepoGroup[] {
+	const groups = new Map<string, PullRequest[]>();
+	for (const pr of items) {
+		const repo = pr.repoFullName || '';
+		groups.set(repo, [...(groups.get(repo) ?? []), pr]);
+	}
+
+	return Array.from(groups, ([repo, grouped]) => ({ repo, items: grouped }));
+}
+
 export function countActiveFilters(filters: PopupFilters, tab: PopupTab): number {
 	// Age filter is temporarily disabled. Restore `Number(Boolean(filters.ageRange))` when re-enabling it.
 	return (
@@ -284,10 +339,15 @@ export function createPrView(items: PullRequest[], filters: PopupFilters, query:
  */
 export function badgeCount(
 	data: { myPRs?: PullRequest[]; reviewRequests?: PullRequest[] },
-	settings: Pick<Settings, 'pinnedTab' | 'badgeCountMode'>,
+	settings: Pick<Settings, 'pinnedTab' | 'badgeCountMode'> & Partial<RepoFilterSettings>,
 	filters: FiltersByTab,
 ): number {
-	const items = (settings.pinnedTab === 'myPRs' ? data.myPRs : data.reviewRequests) || [];
+	// The repository lists are configuration, not a popup filter: they narrow the total in both modes.
+	const items = applyRepoFilter((settings.pinnedTab === 'myPRs' ? data.myPRs : data.reviewRequests) || [], {
+		repoFilterEnabled: settings.repoFilterEnabled ?? DEFAULT_SETTINGS.repoFilterEnabled,
+		repoInclude: settings.repoInclude ?? [],
+		repoExclude: settings.repoExclude ?? [],
+	});
 	if (settings.badgeCountMode !== 'filters') {
 		return items.length;
 	}

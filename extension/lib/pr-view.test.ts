@@ -5,11 +5,14 @@ import {
 	createDefaultFilters,
 	createDefaultFiltersByTab,
 	createPrView,
+	groupByRepo,
 	normalizeFilterState,
 	sameFilters,
+	sortPullRequests,
 	switchTab,
 } from './pr-view';
 import type { PullRequest } from './types';
+import { DEFAULT_SETTINGS } from './ui-config';
 
 // This module is the one place the popup, the website demo and the badge agree on what "shown" and
 // "filtered" mean. When they each had their own copy the counts diverged, so the rules get a check.
@@ -266,6 +269,66 @@ function testConflictsFilter(): void {
 	assert.equal(normalizeFilterState({ tabs: { myPRs: { conflictsOnly: true } } }, 'myPRs').myPRs.conflictsOnly, true);
 }
 
+function testSortAndGroup(): void {
+	const list = [
+		pr({ id: 'a', repoFullName: 'zeta/web', title: 'banana', createdAt: '2026-01-03T00:00:00Z', updatedAt: '2026-02-01T00:00:00Z' }),
+		pr({ id: 'b', repoFullName: 'acme/api', title: 'Cherry', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-02-03T00:00:00Z' }),
+		pr({ id: 'c', repoFullName: 'acme/api', title: 'apple', createdAt: '2026-01-02T00:00:00Z', updatedAt: '2026-02-02T00:00:00Z' }),
+		pr({ id: 'd', repoFullName: 'acme/web', title: 'apple', createdAt: '2026-01-02T00:00:00Z', updatedAt: '2026-02-02T00:00:00Z' }),
+	];
+	const ids = (sorted: PullRequest[]) => sorted.map((item) => item.id).join('');
+
+	// The default is the provider's order, which for To Review puts pending requests first.
+	assert.equal(DEFAULT_SETTINGS.sortBy, 'default');
+	assert.equal(ids(sortPullRequests(list, 'default')), 'abcd');
+	assert.notEqual(sortPullRequests(list, 'default'), list);
+	assert.equal(ids(sortPullRequests(list, 'updated')), 'bcda');
+	assert.equal(ids(sortPullRequests(list, 'newest')), 'acdb');
+	assert.equal(ids(sortPullRequests(list, 'oldest')), 'bcda');
+	// Case-insensitive, and ties keep the incoming order.
+	assert.equal(ids(sortPullRequests(list, 'title')), 'cdab');
+	assert.equal(ids(sortPullRequests(list, 'repo')), 'bcda');
+	// The caller's array is left alone, and a value storage should never hold still sorts.
+	assert.equal(ids(list), 'abcd');
+	assert.equal(ids(sortPullRequests(list, 'bogus' as never)), 'abcd');
+
+	// A group sits where its first PR falls under the sort; items inside keep the list order.
+	const grouped = (sortBy: Parameters<typeof sortPullRequests>[1]) =>
+		groupByRepo(sortPullRequests(list, sortBy)).map((group) => [group.repo, ids(group.items)]);
+	assert.deepEqual(grouped('newest'), [
+		['zeta/web', 'a'],
+		['acme/api', 'cb'],
+		['acme/web', 'd'],
+	]);
+	assert.deepEqual(grouped('oldest'), [
+		['acme/api', 'bc'],
+		['acme/web', 'd'],
+		['zeta/web', 'a'],
+	]);
+	// Sorting by repository is what gives A to Z groups.
+	assert.deepEqual(grouped('repo'), [
+		['acme/api', 'bc'],
+		['acme/web', 'd'],
+		['zeta/web', 'a'],
+	]);
+	assert.deepEqual(groupByRepo([]), []);
+}
+
+function testBadgeHonoursRepoLists(): void {
+	const data = { myPRs: items, reviewRequests: [] };
+	const base = { pinnedTab: 'myPRs' as const, badgeCountMode: 'total' as const };
+	const rules = { repoInclude: [], repoExclude: ['globex/*'] };
+
+	assert.equal(badgeCount(data, base, createDefaultFiltersByTab()), 4);
+	// A missing switch means the default, which is on.
+	assert.equal(badgeCount(data, { ...base, ...rules }, createDefaultFiltersByTab()), 3);
+	assert.equal(badgeCount(data, { ...base, ...rules, repoFilterEnabled: true }, createDefaultFiltersByTab()), 3);
+	// Unticking the popup's checkbox brings the hidden repositories back into the count.
+	assert.equal(badgeCount(data, { ...base, ...rules, repoFilterEnabled: false }, createDefaultFiltersByTab()), 4);
+}
+
 testSwitchTab();
+testBadgeHonoursRepoLists();
 testConflictsFilter();
+testSortAndGroup();
 console.log('pr-view: all checks passed');

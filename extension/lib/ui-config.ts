@@ -12,12 +12,19 @@ const DEFAULT_UI_CONFIG: UiConfig = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
+	issueTracker: 'jira',
 	jiraBaseUrl: '',
+	linearWorkspace: '',
 	displayMode: 'popup',
 	pinnedTab: 'myPRs',
 	visibleColumns: ['title', 'author', 'checks', 'reviewStatus', 'repo', 'changes', 'jira'],
 	pollingIntervalMs: 600000,
 	persistFilters: true,
+	repoFilterEnabled: true,
+	repoInclude: [],
+	repoExclude: [],
+	groupByRepo: false,
+	sortBy: 'default',
 	badgeCountMode: 'total',
 	notificationsEnabled: null,
 	groupNotifications: false,

@@ -1,17 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowLeft, CheckCircle2, ChevronDown, Clock3, Eraser, Expand, GitPullRequest, Inbox, ListFilter, MonitorCog, MonitorSmartphone, Pin, Save, ShieldAlert, Ticket, UserRound, Sparkles, Copy, Check, Bell, BellOff, List, Layers } from 'lucide-svelte';
+	import { ArrowLeft, CheckCircle2, ChevronDown, Clock3, Eraser, Expand, FolderGit2, GitPullRequest, Inbox, Kanban, ListFilter, MonitorCog, MonitorSmartphone, PanelRight, Pin, Save, ShieldAlert, Ticket, UserRound, Sparkles, Copy, Check, Bell, BellOff, List, Layers } from 'lucide-svelte';
 	import Button from '../lib/components/Button.svelte';
 	import RadioCard from '../lib/components/RadioCard.svelte';
 	import SectionCard from '../lib/components/SectionCard.svelte';
 	import InteractiveGuide from '../lib/components/InteractiveGuide.svelte';
 	import AttributionFooter from '../lib/components/AttributionFooter.svelte';
 	import NotificationTest from '../lib/components/NotificationTest.svelte';
-	import { permissionsRequest, runtimeGetURL, runtimeSendMessage } from '../../lib/extension-api';
+	import { actionShortcut, permissionsRequest, runtimeGetURL, runtimeSendMessage, SHORTCUTS_PAGE_HINT } from '../../lib/extension-api';
 	import { storage } from '../../lib/storage';
 	import type { Settings, StoredProviderConfig } from '../../lib/types';
 	import { copyToClipboard } from '../../lib/utils';
 	import { commitJiraUrl, jiraDashboardUrlFor, sanitizeJiraUrl } from '../../lib/jira';
+	import { commitLinearWorkspace, linearDashboardUrlFor } from '../../lib/linear';
+	import { MAX_WILDCARDS_PER_NAME, parseRepoPatterns } from '../../lib/repo-filter';
 	import { commitProvider, connectGithubToken, refreshTokenExpiration } from '../../lib/github-connect';
 	import { DEFAULT_SETTINGS } from '../../lib/ui-config';
 
@@ -32,6 +34,13 @@
 	let currentSettings = $state<Settings>(DEFAULT_SETTINGS);
 	let jiraUrl = $state('');
 	let jiraUrlError = $state('');
+	let linearWorkspace = $state('');
+	let linearError = $state('');
+	let repoIncludeText = $state('');
+	let repoExcludeText = $state('');
+	let repoFilterError = $state('');
+	// What the browser has bound to the toolbar button right now; empty when a clash left it unset.
+	let shortcut = $state('');
 	let pollingIntervalMs = $state(600000);
 	let selectedPollingValue = $state(600000);
 	let customMinutes = $state(10);
@@ -61,6 +70,7 @@
 
 	let isConnected = $derived(!!(provider && provider.user && !reconnecting));
 	let jiraDashboardUrl = $derived(jiraDashboardUrlFor(jiraUrl));
+	let linearDashboardUrl = $derived(linearDashboardUrlFor(linearWorkspace));
 	let normalizedCustomMinutes = $derived.by(() => {
 		const parsed = Number(customMinutes);
 		if (!Number.isFinite(parsed)) {
@@ -95,6 +105,9 @@
 		provider = nextProvider;
 		isTokenInvalid = provider?.isTokenInvalid ?? false;
 		jiraUrl = sanitizeJiraUrl(currentSettings.jiraBaseUrl || '');
+		linearWorkspace = currentSettings.linearWorkspace || '';
+		repoIncludeText = currentSettings.repoInclude.join('\n');
+		repoExcludeText = currentSettings.repoExclude.join('\n');
 		pollingIntervalMs = currentSettings.pollingIntervalMs ?? 600000;
 		if (PRESET_POLLING_VALUES.has(pollingIntervalMs)) {
 			selectedPollingValue = pollingIntervalMs;
@@ -104,6 +117,7 @@
 		}
 
 		void fetchTokenExpiration();
+		shortcut = await actionShortcut();
 	}
 
 	async function fetchTokenExpiration() {
@@ -160,6 +174,8 @@
 
 	async function updateDisplayMode(value: Settings['displayMode']) {
 		await updateSetting('displayMode', value);
+		// The worker re-points the toolbar button: a sidebar only opens from a button that has no popup.
+		await runtimeSendMessage({ type: 'SETTINGS_CHANGED', settings: { displayMode: value } });
 	}
 
 	async function updatePollingInterval(event: Event) {
@@ -211,6 +227,48 @@
 		jiraUrlError = '';
 		jiraUrl = committed;
 		await updateSetting('jiraBaseUrl', committed);
+	}
+
+	// Both boxes are checked together: one bad entry in either must not leave the pair half-saved.
+	async function saveRepoFilters() {
+		const include = parseRepoPatterns(repoIncludeText);
+		const exclude = parseRepoPatterns(repoExcludeText);
+		const invalid = [...include.invalid, ...exclude.invalid];
+		if (invalid.length > 0) {
+			repoFilterError = `Not a repository pattern: ${invalid.join(', ')}. Use owner/repo with * as a wildcard, at most ${MAX_WILDCARDS_PER_NAME} in each name.`;
+			return;
+		}
+
+		repoFilterError = '';
+		repoIncludeText = include.patterns.join('\n');
+		repoExcludeText = exclude.patterns.join('\n');
+		const same = (left: string[], right: string[]) => left.join('\n') === right.join('\n');
+		if (same(include.patterns, currentSettings.repoInclude) && same(exclude.patterns, currentSettings.repoExclude)) {
+			return;
+		}
+
+		const patch = { repoInclude: include.patterns, repoExclude: exclude.patterns };
+		currentSettings = { ...currentSettings, ...patch };
+		await storage.setSettings(patch);
+		await runtimeSendMessage({ type: 'SETTINGS_CHANGED', settings: patch });
+		flashSaved();
+	}
+
+	async function updateRepoFilterEnabled(enabled: boolean) {
+		await updateSetting('repoFilterEnabled', enabled);
+		await runtimeSendMessage({ type: 'SETTINGS_CHANGED', settings: { repoFilterEnabled: enabled } });
+	}
+
+	async function saveLinearWorkspace() {
+		const committed = commitLinearWorkspace(linearWorkspace);
+		if (committed === null) {
+			linearError = 'Please enter a Linear workspace name or URL, or leave the field empty.';
+			return;
+		}
+
+		linearError = '';
+		linearWorkspace = committed;
+		await updateSetting('linearWorkspace', committed);
 	}
 
 	async function validateAndSaveToken() {
@@ -389,19 +447,67 @@
 					<Ticket class="h-5 w-5" />
 				</div>
 				<div>
-					<h2 class="card-title">Jira Integration</h2>
-					<p class="desc">Jira origin link to derive ticket links from branch names.</p>
+					<h2 class="card-title">Issue Tracker</h2>
+					<p class="desc">Where the ticket ids in your branch names link to.</p>
 				</div>
 			</div>
 			<div class="space-y-3">
-				<input class="field-input" type="url" bind:value={jiraUrl} placeholder="https://company.atlassian.net/browse/PROJ-123" onblur={saveJiraUrl} />
-				{#if jiraUrlError}
-					<p class="text-sm text-(--danger)">{jiraUrlError}</p>
-				{:else if jiraDashboardUrl}
-					<p class="desc">Your Dashboard: <a class="link-accent" href={jiraDashboardUrl} target="_blank" rel="noopener noreferrer">{jiraDashboardUrl}</a></p>
+				<div class="grid-2">
+					<RadioCard name="issueTracker" value="jira" currentValue={currentSettings.issueTracker} title="Jira" description="Link tickets to a Jira Cloud or Data Center site." iconComponent={Ticket} onchange={() => updateSetting('issueTracker', 'jira')} />
+					<RadioCard name="issueTracker" value="linear" currentValue={currentSettings.issueTracker} title="Linear" description="Link issues to a Linear workspace." iconComponent={Kanban} onchange={() => updateSetting('issueTracker', 'linear')} />
+				</div>
+				{#if currentSettings.issueTracker === 'linear'}
+					<input class="field-input" type="text" bind:value={linearWorkspace} placeholder="acme or https://linear.app/acme" onblur={saveLinearWorkspace} />
+					{#if linearError}
+						<p class="text-sm text-(--danger)">{linearError}</p>
+					{:else if linearDashboardUrl}
+						<p class="desc">Your workspace: <a class="link-accent" href={linearDashboardUrl} target="_blank" rel="noopener noreferrer">{linearDashboardUrl}</a></p>
+					{:else}
+						<p class="desc">Enter the workspace name from your Linear URL, or paste any Linear link.</p>
+					{/if}
 				{:else}
-					<p class="desc">Enter any Jira URL and PR Pulse will normalize it to the base workspace URL.</p>
+					<input class="field-input" type="url" bind:value={jiraUrl} placeholder="https://company.atlassian.net/browse/PROJ-123" onblur={saveJiraUrl} />
+					{#if jiraUrlError}
+						<p class="text-sm text-(--danger)">{jiraUrlError}</p>
+					{:else if jiraDashboardUrl}
+						<p class="desc">Your Dashboard: <a class="link-accent" href={jiraDashboardUrl} target="_blank" rel="noopener noreferrer">{jiraDashboardUrl}</a></p>
+					{:else}
+						<p class="desc">Enter any Jira URL and PR Pulse will normalize it to the base workspace URL.</p>
+					{/if}
 				{/if}
+			</div>
+		</SectionCard>
+
+		<SectionCard>
+			<div class="section-row">
+				<div class="step-icon">
+					<FolderGit2 class="h-5 w-5" />
+				</div>
+				<div>
+					<h2 class="card-title">Repository Filters</h2>
+					<p class="desc">Limit the dashboard and badge to the repositories you care about. Notifications are not affected.</p>
+				</div>
+			</div>
+			<div class="space-y-3">
+				<div class="grid-2">
+					<label class="space-y-1.5">
+						<span class="label-title">Include</span>
+						<textarea class="field-input font-mono" rows="4" spellcheck="false" bind:value={repoIncludeText} onblur={saveRepoFilters} placeholder="acme/*&#10;foo-*/bar-*"></textarea>
+						<span class="desc block">Empty includes every repository.</span>
+					</label>
+					<label class="space-y-1.5">
+						<span class="label-title">Exclude</span>
+						<textarea class="field-input font-mono" rows="4" spellcheck="false" bind:value={repoExcludeText} onblur={saveRepoFilters} placeholder="acme/legacy-*&#10;*/dotfiles"></textarea>
+						<span class="desc block">Applied after the include list.</span>
+					</label>
+				</div>
+				{#if repoFilterError}
+					<p class="text-sm text-(--danger)">{repoFilterError}</p>
+				{/if}
+				<label class="flex cursor-pointer items-center gap-2 text-sm">
+					<input type="checkbox" class="rounded border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" checked={currentSettings.repoFilterEnabled} onchange={(event) => updateRepoFilterEnabled(event.currentTarget.checked)} />
+					<span>Filter PRs using these lists. Also toggled by "Repo filter" above the PR list.</span>
+				</label>
 			</div>
 		</SectionCard>
 
@@ -454,7 +560,20 @@
 				<div class="grid gap-3">
 					<RadioCard name="displayMode" value="popup" currentValue={currentSettings.displayMode || 'popup'} title="Popup" description="Keep the toolbar interaction lightweight and compact." iconComponent={MonitorSmartphone} onchange={updateDisplayMode} />
 					<RadioCard name="displayMode" value="fullpage" currentValue={currentSettings.displayMode || 'popup'} title="Full Page" description="Use a larger tab surface for denser layouts" iconComponent={Expand} onchange={updateDisplayMode} />
+					<RadioCard name="displayMode" value="sidebar" currentValue={currentSettings.displayMode || 'popup'} title="Sidebar" description="Dock the dashboard beside the page at full window height. The toolbar button opens and closes it." iconComponent={PanelRight} onchange={updateDisplayMode} />
 				</div>
+				<label class="mt-3 flex cursor-pointer items-center gap-2 text-sm">
+					<input type="checkbox" class="rounded border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" checked={currentSettings.groupByRepo} onchange={(event) => updateSetting('groupByRepo', event.currentTarget.checked)} />
+					<span>Group the PR list by repository.</span>
+				</label>
+				<p class="desc mt-3">
+					{#if shortcut}
+						<code>{shortcut}</code> does the same as the toolbar button.
+					{:else}
+						No keyboard shortcut is set for the toolbar button.
+					{/if}
+					Change it at <code>{SHORTCUTS_PAGE_HINT}</code>.
+				</p>
 			</SectionCard>
 		</div>
 

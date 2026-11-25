@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowLeft, Expand, MonitorSmartphone, Sparkles } from 'lucide-svelte';
+	import { ArrowLeft, Expand, MonitorSmartphone, PanelRight, Sparkles } from 'lucide-svelte';
 	import Button from '../../lib/components/Button.svelte';
 	import RadioCard from '../../lib/components/RadioCard.svelte';
 	import SectionCard from '../../lib/components/SectionCard.svelte';
@@ -31,12 +31,13 @@
 		</div>
 		<div>
 			<h2 class="step-heading">Choose a display mode</h2>
-			<p class="desc">Start compact in the popup or jump directly into a full-page workspace.</p>
+			<p class="desc">Start compact in the popup, dock it in the sidebar, or jump directly into a full-page workspace.</p>
 		</div>
 	</div>
-	<div class="grid gap-3 md:grid-cols-2">
+	<div class="grid gap-3 md:grid-cols-3">
 		<RadioCard name="displayMode" value="popup" currentValue={displayMode} title="Popup" description="A compact glanceable interface from the toolbar for quick daily use." iconComponent={MonitorSmartphone} onchange={onDisplayModeChange} />
 		<RadioCard name="displayMode" value="fullpage" currentValue={displayMode} title="Full page" description="A broader canvas better suited for future filters, search, and richer organization." iconComponent={Expand} onchange={onDisplayModeChange} />
+		<RadioCard name="displayMode" value="sidebar" currentValue={displayMode} title="Sidebar" description="Docked beside the page at full window height, open while you browse." iconComponent={PanelRight} onchange={onDisplayModeChange} />
 	</div>
 	<div class="step-actions">
 		<Button variant="secondary" onclick={onBack}><ArrowLeft class="h-4 w-4" />Back</Button>

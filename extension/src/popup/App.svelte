@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
+	import { FolderGit2 } from 'lucide-svelte';
 	import PopupHeader from './PopupHeader.svelte';
 	import PrCard from './PrCard.svelte';
 	import PopupStates from './PopupStates.svelte';
 	import SearchFilter from './SearchFilter.svelte';
+	import ListToolbar from './ListToolbar.svelte';
+	import PopupResizer from './PopupResizer.svelte';
 	import AttributionFooter from '../lib/components/AttributionFooter.svelte';
 	import NotificationTest from '../lib/components/NotificationTest.svelte';
 	import {
@@ -16,9 +19,12 @@
 		type Unsubscribe,
 	} from '../../lib/extension-api';
 	import { storage } from '../../lib/storage';
-	import type { PopupFilters, PopupTab, PullRequestData, Settings, SyncStatus } from '../../lib/types';
+	import type { PopupFilters, PopupTab, PullRequest, PullRequestData, Settings, SyncStatus } from '../../lib/types';
 	import { createPopupSession, type PopupState } from '../../lib/popup-session';
-	import { createDefaultFilters, createPrView, sameFilters } from '../../lib/pr-view';
+	import { DEFAULT_SETTINGS, normalizeSettings } from '../../lib/ui-config';
+	import type { PopupSize } from '../../lib/popup-size';
+	import { applyRepoFilter, hasRepoRules } from '../../lib/repo-filter';
+	import { createDefaultFilters, createPrView, groupByRepo, sameFilters, sortPullRequests } from '../../lib/pr-view';
 	import {
 		copyToClipboard,
 		formatRelativeTime,
@@ -49,6 +55,11 @@
 	// Everything below is the popup's own surface state: what is open, what just got copied, what the
 	// toast says. The session owns the rest.
 	let isFullpageMode = $state(false);
+	// Docked in the browser's sidebar. Fixed for the life of the page, unlike the redirect-driven flag above.
+	const isSidebarMode = new URLSearchParams(window.location.search).has('sidebar');
+	// The sidebar and the full page stay open for hours; this keeps "Updated 3m ago" honest between syncs.
+	let clock = $state(0);
+	let clockTimer: ReturnType<typeof setInterval> | null = null;
 	let refreshInProgress = $state(false);
 	let copiedItemId = $state<string | null>(null);
 	let toastMessage = $state('');
@@ -75,11 +86,15 @@
 		});
 		void init();
 		window.addEventListener('keydown', handleKeydown);
+		clockTimer = setInterval(() => {
+			clock += 1;
+		}, 30_000);
 	});
 
 	onDestroy(() => {
 		unsubscribeStorage?.();
 		unsubscribeSession?.();
+		if (clockTimer) clearInterval(clockTimer);
 		window.removeEventListener('keydown', handleKeydown);
 	});
 
@@ -87,6 +102,10 @@
 		if (areaName !== 'local') return;
 		if (changes.syncStatus) {
 			session.applySyncStatus(changes.syncStatus.newValue as SyncStatus | undefined);
+		}
+		// A cleared key normalizes back to the defaults, same as the next open would read.
+		if (changes.settings) {
+			session.applySettings(normalizeSettings(changes.settings.newValue as Partial<Settings> | undefined));
 		}
 		if (changes.pullRequests?.newValue) {
 			session.applyPullRequests(changes.pullRequests.newValue as PullRequestData);
@@ -96,7 +115,8 @@
 	async function redirectToFullpage(bootstrapSettings: Settings): Promise<boolean> {
 		isFullpageMode = new URLSearchParams(window.location.search).has('fullpage');
 
-		if (bootstrapSettings.displayMode === 'fullpage' && !isFullpageMode) {
+		// The sidebar can be opened from the browser's own menu whatever the display mode is; it stays put.
+		if (bootstrapSettings.displayMode === 'fullpage' && !isFullpageMode && !isSidebarMode) {
 			await tabsCreate({ url: runtimeGetURL('popup/popup.html?fullpage=1') });
 			window.close();
 			return true;
@@ -169,6 +189,23 @@
 		showToast(justEnabled ? 'Notifications on' : 'Notifications stay off', justEnabled ? 'success' : 'info');
 	}
 
+	// The stored config is in rem, like the rest of the UI config; the handles work in pixels.
+	function rootFontSize(): number {
+		return Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+	}
+
+	function defaultPopupSize(): PopupSize {
+		const rem = rootFontSize();
+		return { width: DEFAULT_SETTINGS.ui.popupWidthRem * rem, height: DEFAULT_SETTINGS.ui.popupHeightRem * rem };
+	}
+
+	function rememberPopupSize(size: PopupSize) {
+		const rem = rootFontSize();
+		void session.updateSettings({
+			ui: { ...popup.settings.ui, popupWidthRem: size.width / rem, popupHeightRem: size.height / rem },
+		});
+	}
+
 	function toggleSearch() {
 		if (!isSearchOpen) {
 			isSearchOpen = true;
@@ -215,20 +252,33 @@
 	let sync = $derived(popup.sync);
 	let syncing = $derived(refreshInProgress || sync !== null);
 
-	let currentItems = $derived(currentTab === 'myPRs' ? prData.myPRs || [] : prData.reviewRequests || []);
-	let myPrCount = $derived(prData.myPRs?.length || 0);
-	let reviewCount = $derived(prData.reviewRequests?.length || 0);
+	// The repository lists from settings come first: the counts, the filter options and the list all
+	// describe what is left, and only the toolbar's checkbox knows anything was held back.
+	let myItems = $derived(applyRepoFilter(prData.myPRs || [], settings));
+	let reviewItems = $derived(applyRepoFilter(prData.reviewRequests || [], settings));
+	let tabTotal = $derived((currentTab === 'myPRs' ? prData.myPRs : prData.reviewRequests)?.length || 0);
+	let currentItems = $derived(currentTab === 'myPRs' ? myItems : reviewItems);
+	let myPrCount = $derived(myItems.length);
+	let reviewCount = $derived(reviewItems.length);
+	let repoHiddenCount = $derived(tabTotal - currentItems.length);
 	let syncText = $derived(sync && sync.total > 0 ? `Syncing… ${Math.min(sync.loaded, sync.total)} of ${sync.total} PRs` : 'Syncing…');
-	let lastUpdatedText = $derived(
-		syncing ? syncText : prData.lastFetched ? `Updated ${formatRelativeTime(prData.lastFetched)}` : 'Waiting for first sync',
-	);
+	let lastUpdatedText = $derived.by(() => {
+		// Read only to re-run on the tick: the relative time goes stale without it.
+		void clock;
+		if (syncing) return syncText;
+		return prData.lastFetched ? `Updated ${formatRelativeTime(prData.lastFetched)}` : 'Waiting for first sync';
+	});
 	let fullpageShellClasses = $derived(isFullpageMode ? 'w-full max-w-[80rem]' : 'h-full');
-	let cardListClasses = $derived(isFullpageMode ? 'grid gap-3 xl:grid-cols-2' : 'flex flex-col gap-3 pr-1 scroll-thin');
+	let cardListClasses = $derived(isFullpageMode ? 'grid gap-3 xl:grid-cols-2' : 'popup-card-grid pr-1 scroll-thin');
 	let view = $derived(createPrView(currentItems, activeFilters, searchQuery, currentTab));
-	let filteredItems = $derived(view.items);
+	// A search result is already ranked by relevance; re-sorting it would bury the best match.
+	let filteredItems = $derived(searchQuery.trim() ? view.items : sortPullRequests(view.items, settings.sortBy));
+	let repoGroups = $derived(settings.groupByRepo ? groupByRepo(filteredItems) : []);
 	let filterCount = $derived(view.filterCount);
 	let filterActive = $derived(filterCount > 0);
 	let showSearchControls = $derived(!loading && !setupRequired && currentItems.length > 0);
+	// Stays up when the repository lists hide everything, so the checkbox that undoes it is reachable.
+	let showListToolbar = $derived(!loading && !setupRequired && tabTotal > 0);
 	let showTabToggle = $derived(!loading && !setupRequired);
 	let askNotifications = $derived(!loading && !setupRequired && settings.notificationsEnabled === null);
 	let searchActive = $derived(isSearchOpen || searchQuery.trim().length > 0);
@@ -244,8 +294,11 @@
 	});
 </script>
 
+{#snippet card(pr: PullRequest)}
+	<PrCard {pr} {isFullpageMode} {settings} {copiedItemId} onOpenUrl={safeOpenUrl} onCopy={handleCopy} />
+{/snippet}
 
-<div class={isFullpageMode ? 'min-h-screen px-6 py-6' : 'popup-frame'}>
+<div class={isFullpageMode ? 'min-h-screen px-6 py-6' : isSidebarMode ? 'popup-frame popup-frame-fill' : 'popup-frame'}>
 	<div class={`mx-auto flex ${fullpageShellClasses} min-h-0 flex-col gap-3`}>
 		<div class={`surface-card overflow-hidden ${isFullpageMode ? '' : 'flex h-full flex-col'}`}>
 			<PopupHeader
@@ -283,6 +336,17 @@
 				</div>
 			{/if}
 
+			{#if showListToolbar}
+				<ListToolbar
+					sortBy={settings.sortBy}
+					hasRepoRules={hasRepoRules(settings)}
+					repoFilterEnabled={settings.repoFilterEnabled}
+					hiddenCount={repoHiddenCount}
+					onRepoFilterChange={(repoFilterEnabled) => void session.updateSettings({ repoFilterEnabled })}
+					onSortChange={(sortBy) => void session.updateSettings({ sortBy })}
+				/>
+			{/if}
+
 			{#if showSearchControls && isSearchOpen}
 				<div class="border-b border-soft px-2.5 py-1.5 sm:px-2.5">
 					<SearchFilter
@@ -301,6 +365,11 @@
 			<div class={`px-4 ${showSearchControls ? 'pb-3 pt-3' : 'py-3'} sm:px-4 ${isFullpageMode ? 'min-h-[70vh]' : 'min-h-0 flex-1 overflow-auto'}`}>
 				{#if loading}
 					<div class="flex min-h-50 items-center justify-center desc">Loading PRs...</div>
+				{:else if !setupRequired && currentItems.length === 0 && repoHiddenCount > 0}
+					<div class="py-8 text-center text-soft">
+						<p>{repoHiddenCount === 1 ? 'The only PR here is' : `All ${repoHiddenCount} PRs here are`} hidden by your repository filter.</p>
+						<button class="mt-2 text-sm text-(--accent) hover:underline" onclick={() => void session.updateSettings({ repoFilterEnabled: false })}>Show all repositories</button>
+					</div>
 				{:else if setupRequired || currentItems.length === 0}
 					<PopupStates
 						{setupRequired}
@@ -322,17 +391,28 @@
 							<p>No PRs match your filters.</p>
 							<button class="mt-2 text-sm text-(--accent) hover:underline" onclick={() => { searchQuery = ''; activeFilters = createDefaultFilters(); }}>Clear filters</button>
 						</div>
+					{:else if settings.groupByRepo}
+						<div class="flex flex-col gap-4">
+							{#each repoGroups as group (group.repo)}
+								<section>
+									<div class="mb-2 flex items-center gap-2 text-xs font-semibold text-soft">
+										<FolderGit2 class="h-3.5 w-3.5 shrink-0" />
+										<button class="unstyled-button min-w-0 truncate text-white hover:text-(--accent) hover:underline" title={group.repo} onclick={() => safeOpenUrl(`https://github.com/${encodeURI(group.repo)}`)}>{group.repo}</button>
+										<span class="shrink-0 rounded-full bg-white/8 px-1.5 py-0.5 text-[10px] leading-none">{group.items.length}</span>
+										<span class="h-px flex-1 bg-(--border-soft)"></span>
+									</div>
+									<div class={cardListClasses}>
+										{#each group.items as pr (pr.id)}
+											{@render card(pr)}
+										{/each}
+									</div>
+								</section>
+							{/each}
+						</div>
 					{:else}
 						<div class={cardListClasses}>
 							{#each filteredItems as pr (pr.id)}
-								<PrCard
-									{pr}
-									{isFullpageMode}
-									{settings}
-									{copiedItemId}
-									onOpenUrl={safeOpenUrl}
-									onCopy={handleCopy}
-								/>
+								{@render card(pr)}
 							{/each}
 						</div>
 					{/if}
@@ -350,6 +430,10 @@
 
 		{#if isFullpageMode}
 			<AttributionFooter />
+		{/if}
+
+		{#if !isFullpageMode && !isSidebarMode}
+			<PopupResizer defaultSize={defaultPopupSize()} onResize={rememberPopupSize} />
 		{/if}
 
 		{#if toastVisible}

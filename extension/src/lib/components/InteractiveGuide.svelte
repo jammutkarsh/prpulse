@@ -15,7 +15,7 @@
 		copyPR: "Copies PR link",
 		repo: "Opens repository on GitHub",
 		diff: "Opens PR files changed tab",
-		jira: "Opens linked Jira ticket",
+		jira: "Opens linked Jira or Linear issue",
 		branch: "Opens branch on GitHub",
 		copyBranch: "Copies branch name",
 		statusChecks: "Opens PR checks tab on GitHub",
