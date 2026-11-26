@@ -111,4 +111,42 @@
 		font-size: 0.6875rem;
 		color: var(--text-soft);
 	}
+
+	/* ── Segmented toggle: a two-option choice on one row ── */
+
+	.segmented {
+		display: inline-flex;
+		flex-shrink: 0;
+		overflow: hidden;
+		border-radius: 0.375rem;
+		border: 1px solid var(--border-soft);
+	}
+
+	.segmented-option {
+		appearance: none;
+		background: transparent;
+		border: 0;
+		cursor: pointer;
+		padding: 0.125rem 0.5rem;
+		font-size: 0.6875rem;
+		color: var(--text-soft);
+		white-space: nowrap;
+		transition:
+			background-color 0.2s ease,
+			color 0.2s ease;
+	}
+
+	.segmented-option + .segmented-option {
+		border-left: 1px solid var(--border-soft);
+	}
+
+	.segmented-option:hover {
+		background: var(--bg-muted);
+		color: white;
+	}
+
+	.segmented-option[aria-pressed='true'] {
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		color: var(--accent);
+	}
 }

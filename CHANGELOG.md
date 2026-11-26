@@ -2,6 +2,16 @@
 
 All notable changes to PR Pulse are documented in this file.
 
+## [2.5.0] – 2026-11-26
+
+- **Shortcut toggles**: `Cmd/Ctrl+Shift+P` (`Alt+Shift+P` on Firefox) opens and closes the popup or sidebar.
+- **Settings in the sidebar**: In sidebar mode, Settings opens inside the sidebar. Expand opens the full page in a tab and closes the sidebar.
+- **Settings redesign**: Compact one-line rows; help text moved to info tooltips; two- and three-way choices are segmented toggles. The shortcut shows as key caps with a Change button that opens the browser's shortcut settings, and the GitHub token can only be copied, never shown.
+- **Group by repo in the toolbar**: A List / By repo toggle beside Sort replaces the Settings checkbox. New installs group by repository by default; the repository filter starts off.
+- **Toggle filters**: Draft PRs (Hide / Include / Only), review status and merge-conflict filters are single-line toggles.
+- **Onboarding**: One page that reveals each section as you continue, styled like Settings (compact rows, tooltips, toggles). Optional default tab, group-by-repo and repository limits.
+- **Website**: Copy covers the newer features, plus a Contributors section.
+
 ## [2.4.0] – 2026-11-25
 
 - **Linear as an issue tracker**: Settings and onboarding offer a Jira/Linear choice, and branch-name tickets link to `linear.app/<workspace>/issue/<ID>`. Both trackers' values are kept, so switching back loses nothing.
@@ -9,7 +19,7 @@ All notable changes to PR Pulse are documented in this file.
 - **Repository include/exclude lists**: Settings take two lists of `owner/repo` patterns that narrow the PR list, tab counts and badge. `*` is the only wildcard and does not cross the slash; a bare `owner` means `owner/*`. Notifications are deliberately unaffected.
 - **Resizable popup**: Drag the bottom edge or corners to resize; double-click resets. The size is remembered and clamped to the room left on the display and to the 800×600 popup cap. A popup dragged wide enough lays cards out in two columns.
 - **Sidebar display mode**: A third Display Mode docks the dashboard in the browser's sidebar (Firefox `sidebar_action`, Chrome side panel), free of the popup size cap. The toolbar button toggles it.
-- **Keyboard shortcut**: `Alt+Shift+P` does what the toolbar button does in the current display mode, and Settings shows the current key and where to rebind it.
+- **Keyboard shortcut**: `Cmd/Ctrl+Shift+P` (`Alt+Shift+P` on Firefox, where the former opens a private window) does what the toolbar button does in the current display mode, and Settings shows the current key and where to rebind it.
 - **Stays fresh while open**: The "Updated … ago" footer refreshes every 30 seconds, and an open dashboard follows settings changed elsewhere, since a docked sidebar stays open for hours.
 
 ## [2.3.0] – 2026-11-20

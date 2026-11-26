@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { POPUP_PATH, SIDEBAR_PATH } from '../extension/lib/dashboard-paths';
+import { POPUP_PATH, SIDEBAR_PATH, TOGGLE_COMMAND } from '../extension/lib/dashboard-paths';
 
 type BrowserTarget = 'chrome' | 'firefox';
 
@@ -27,7 +27,7 @@ type ExtensionManifest = {
 		  };
 	options_page: string;
 	icons: Record<string, string>;
-	commands: Record<string, { suggested_key: { default: string }; description: string }>;
+	commands: Record<string, { suggested_key: { default: string; mac?: string }; description: string }>;
 	/** Firefox's sidebar. */
 	sidebar_action?: {
 		default_panel: string;
@@ -88,10 +88,13 @@ const baseManifest = {
 		'128': 'icons/icon128.png',
 	},
 	commands: {
-		// The same as clicking the toolbar button, so it follows the display mode: it opens the popup or
-		// the full page, and toggles the sidebar. Ctrl/Cmd+Shift+P is Firefox's private window, hence Alt.
-		_execute_action: {
-			suggested_key: { default: 'Alt+Shift+P' },
+		// Chrome: a custom command, not `_execute_action`. The browser consumes a registered shortcut, so
+		// with `_execute_action` the open popup never hears the second press and cannot close. The worker
+		// handles this one and follows the display mode (see service-worker.ts).
+		// Firefox gets `_execute_action` instead, which it toggles itself, on Alt+Shift+P because it binds
+		// Ctrl/Cmd+Shift+P to a private window (see createManifest).
+		[TOGGLE_COMMAND]: {
+			suggested_key: { default: 'Ctrl+Shift+P', mac: 'Command+Shift+P' },
 			description: 'Open or close PR Pulse',
 		},
 	},
@@ -111,6 +114,9 @@ function createManifest(target: BrowserTarget, base: Omit<ExtensionManifest, 'ba
 	if (target === 'firefox') {
 		return {
 			...base,
+			commands: {
+				_execute_action: { ...base.commands[TOGGLE_COMMAND], suggested_key: { default: 'Alt+Shift+P' } },
+			},
 			background: {
 				scripts: ['service-worker.js'],
 				type: 'module',

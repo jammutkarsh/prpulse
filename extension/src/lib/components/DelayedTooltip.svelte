@@ -5,12 +5,14 @@
 	interface Props {
 		text: string;
 		delay?: number;
+		wrap?: boolean;
 		children?: Snippet;
 	}
 
 	let {
 		text,
 		delay = 500,
+		wrap = false,
 		children,
 	}: Props = $props();
 
@@ -57,7 +59,7 @@
 >
 	{@render children?.()}
 	{#if isVisible}
-		<span role="tooltip" class="pointer-events-none absolute left-1/2 top-full z-40 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-soft bg-(--bg-panel-strong) px-2.5 py-1.5 text-xs font-medium text-white shadow-lg">
+		<span role="tooltip" class={`pointer-events-none absolute left-1/2 top-full z-40 mt-2 -translate-x-1/2 rounded-md ${wrap ? 'w-60 whitespace-normal text-left' : 'whitespace-nowrap'} border border-soft bg-(--bg-panel-strong) px-2.5 py-1.5 text-xs font-medium text-white shadow-lg`}>
 			{text}
 		</span>
 	{/if}

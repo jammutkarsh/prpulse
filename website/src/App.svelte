@@ -11,6 +11,9 @@
 		MousePointerClick,
 		CircleQuestionMark,
 		Gauge,
+		Layers,
+		PanelRight,
+		Bell,
 	} from 'lucide-svelte';
 	import PopupDemo from './lib/PopupDemo.svelte';
 	import { publicGitHubSource, fetchStars, RateLimitError } from './lib/github';
@@ -170,10 +173,13 @@
 	// `wide` cards take the full last row — 7 items in a 3-column grid would otherwise leave a hole.
 	const features: Array<{ tag: string; icon: typeof Zap; title: string; body: string; wide?: boolean }> = [
 		{ tag: 'Speed', icon: MousePointerClick, title: 'Single Click, every repo', body: 'Everything that needs you in a single popup. No repo-hopping, no tab switching, no waiting on page loads.' },
-		{ tag: 'Search', icon: SearchCode, title: 'Find it as you type', body: 'Fuzzy search across every repo by title, branch, author, or Jira ticket the moment you start typing.' },
-		{ tag: 'Filters', icon: SlidersHorizontal, title: 'Filters that stay put', body: 'By owner, repo, author, draft state, and review status — remembered per tab, exactly how you left them.' },
-		{ tag: 'Signal', icon: Zap, title: 'Status at a glance', body: 'CI checks and review state live on each card, color-coded. Know what to act on without opening anything.' },
+		{ tag: 'Search', icon: SearchCode, title: 'Find it as you type', body: 'Fuzzy search across every repo by title, branch, author, or Jira or Linear ticket the moment you start typing.' },
+		{ tag: 'Filters', icon: SlidersHorizontal, title: 'Filters that stay put', body: 'By owner, repo, author, draft state, merge conflicts, and review status — plus repo include/exclude lists. Remembered per tab, exactly how you left them.' },
+		{ tag: 'Signal', icon: Zap, title: 'Status at a glance', body: 'CI checks, review state, and merge conflicts live on each card, color-coded. Know what to act on without opening anything.' },
 		{ tag: 'Privacy', icon: ShieldCheck, title: 'Local-first, always', body: 'Your token and data stay in browser storage. PR Pulse talks straight to GitHub — no third-party server.' },
+		{ tag: 'Order', icon: Layers, title: 'Sort and group by repo', body: 'Sort by pending first, recently updated, newest, oldest, repository, or title, and group the list under per-repo headings.' },
+		{ tag: 'Layout', icon: PanelRight, title: 'Popup or sidebar, your size', body: 'Drag the popup to resize it, or dock the dashboard in the browser sidebar. Toggle either with Cmd/Ctrl+Shift+P (Alt+Shift+P on Firefox).' },
+		{ tag: 'Alerts', icon: Bell, title: 'Notified when it changes', body: 'Opt-in desktop notifications for review requests, approvals, changes requested, and CI turning red or green.' },
 		{ tag: 'Reach', icon: Github, title: 'Chrome and Firefox', body: 'The same dashboard in both browsers. Free, open source, and shipped as a real extension.' },
 		{
 			tag: 'Scale',
@@ -183,6 +189,13 @@
 			wide: true,
 		},
 	];
+
+	// From `gh api repos/jammutkarsh/pr-pulse/contributors`, bots excluded.
+	const contributors = ['jammutkarsh', 'flojon', 'vvuk'].map((login) => ({
+		login,
+		url: `https://github.com/${login}`,
+		avatar: `https://github.com/${login}.png?size=72`,
+	}));
 
 	const tax = ['open github', 'pick a repo', 'find pull requests', 'check status', 'go back', 'switch repo'];
 	// Animation beats for the before/after panels: every step shows a short
@@ -386,6 +399,22 @@
 						<h3 class="mt-4 font-semibold text-white">{f.title}</h3>
 						<p class={`mt-2 text-sm leading-relaxed text-soft ${f.wide ? 'max-w-3xl' : ''}`}>{f.body}</p>
 					</div>
+				{/each}
+			</div>
+		</section>
+
+		<!-- contributors -->
+		<section class="py-14 sm:py-16">
+			<h2 class="display text-3xl sm:text-4xl">Contributors</h2>
+			<div class="mt-9 flex flex-wrap gap-3">
+				{#each contributors as c (c.login)}
+					<a
+						href={c.url}
+						class="card-hover inline-flex items-center gap-3 rounded-xl border border-soft bg-(--bg-panel) py-2 pr-4 pl-2 text-soft no-underline transition hover:text-white"
+					>
+						<img src={c.avatar} alt="" class="h-9 w-9 rounded-full" loading="lazy" />
+						<span class="mono text-sm">{c.login}</span>
+					</a>
 				{/each}
 			</div>
 		</section>

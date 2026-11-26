@@ -2,6 +2,7 @@
 	import { CheckCircle2, RefreshCw } from 'lucide-svelte';
 	import Button from '../../lib/components/Button.svelte';
 	import SectionCard from '../../lib/components/SectionCard.svelte';
+	import InfoTip from '../../lib/components/InfoTip.svelte';
 	import InteractiveGuide from '../../lib/components/InteractiveGuide.svelte';
 	import { onboardingSyncLabel } from '../../../lib/popup-session';
 	import type { Settings } from '../../../lib/types';
@@ -20,35 +21,26 @@
 	let syncLabel = $derived(onboardingSyncLabel(syncing, syncComplete, syncedPrCount));
 </script>
 
-<SectionCard className="p-6">
-	<div class="flex flex-col items-center gap-5 text-center">
-		<div class="accent-surface rounded-full border p-4 text-(--accent)">
-			<CheckCircle2 class="h-10 w-10" />
+<SectionCard>
+	<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+		<div class="flex items-center gap-3">
+			<div class="step-icon !p-2"><CheckCircle2 class="h-4 w-4" /></div>
+			<h2 class="card-title">You're all set</h2>
+			<InfoTip text="Hover over the elements in the sample card to see what each one does." />
 		</div>
-		<div class="space-y-2">
-			<h2 class="text-2xl font-semibold text-white">Get familiar with PR Pulse</h2>
-			<p class="desc">Hover over the elements in the sample card below to see how it works.</p>
-			{#if syncLabel}
-				<div class="inline-flex items-center gap-1.5 rounded-full border border-(--accent-border) bg-(--accent-muted) px-3 py-1 text-xs font-medium text-(--accent)">
-					{#if syncing}
-						<RefreshCw class="h-3 w-3 animate-spin" />
-					{/if}
-					<span>{syncLabel}</span>
-				</div>
-			{/if}
-		</div>
-		<div class="space-y-4">
-			<InteractiveGuide />
-		</div>
-		{#if displayMode === 'popup'}
-			<div class="flex flex-col items-center gap-2 mt-4">
-				<Button onclick={onClose}>Close Setup</Button>
-				<span class="desc">Pin the extension and click on it to open.</span>
-			</div>
-		{:else}
-			<div class="mt-4">
-				<Button onclick={onClose}>Open PR Pulse</Button>
+		{#if syncLabel}
+			<div class="inline-flex items-center gap-1.5 rounded-full border border-(--accent-border) bg-(--accent-muted) px-3 py-1 text-xs font-medium text-(--accent)">
+				{#if syncing}
+					<RefreshCw class="h-3 w-3 animate-spin" />
+				{/if}
+				<span>{syncLabel}</span>
 			</div>
 		{/if}
+	</div>
+	<InteractiveGuide />
+	<hr class="my-5 border-soft" />
+	<div class="flex items-center justify-between gap-4 rounded-lg border border-soft px-4 py-3 text-sm">
+		<span class="text-soft">{displayMode === 'popup' ? 'Pin the extension and click it to open.' : 'Open the dashboard to get started.'}</span>
+		<Button onclick={onClose}>{displayMode === 'popup' ? 'Close setup' : 'Open PR Pulse'}</Button>
 	</div>
 </SectionCard>

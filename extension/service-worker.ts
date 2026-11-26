@@ -1,6 +1,7 @@
 import { GitHubProvider } from './lib/providers/github-provider';
 import {
 	actionOnClickedAddListener,
+	actionOpenPopup,
 	actionSetBadgeBackgroundColor,
 	actionSetBadgeText,
 	actionSetPopup,
@@ -8,27 +9,31 @@ import {
 	alarmsClear,
 	alarmsCreate,
 	alarmsGet,
+	commandsOnCommandAddListener,
 	notificationsClear,
 	notificationsCreate,
 	notificationsOnButtonClickedAddListener,
 	notificationsAvailable,
 	notificationsOnClickedAddListener,
 	permissionsOnAddedAddListener,
+	popupIsOpen,
 	POPUP_PATH,
 	runtimeGetURL,
 	runtimeOnInstalledAddListener,
 	runtimeOnMessageAddListener,
 	runtimeOnStartupAddListener,
+	runtimeSendMessage,
 	sidebarToggle,
 	sidePanelSetOpenOnActionClick,
 	tabsCreate,
+	TOGGLE_COMMAND,
 } from './lib/extension-api';
 import { onFiltersChanged, storage } from './lib/storage';
 import { badgeCount } from './lib/pr-view';
 import { DASHBOARD_URL, notificationsFor } from './lib/pr-notify';
 import { isAuthError } from './lib/errors';
 import { createSyncCoordinator, runSync as runSyncWith, type SyncOptions } from './lib/sync';
-import type { PrSource, PrSourceResult, PullRequestData, RuntimeMessage } from './lib/types';
+import type { PrSource, PrSourceResult, PullRequestData, RuntimeMessage, Settings } from './lib/types';
 
 const ALARM_NAME = 'pr-poll';
 
@@ -166,6 +171,10 @@ function registerNotificationListeners(): void {
 registerNotificationListeners();
 permissionsOnAddedAddListener(registerNotificationListeners);
 
+// Only so the shortcut can open a sidebar synchronously. Every display-mode change goes through
+// `applyDisplayMode`, which refreshes it, and a worker restart re-runs that too.
+let cachedDisplayMode: Settings['displayMode'] | undefined;
+
 /**
  * Points the toolbar button at what the display mode says it opens. In sidebar mode the popup is
  * removed, because a button with a popup never reports its clicks. The browser forgets `setPopup`
@@ -173,6 +182,7 @@ permissionsOnAddedAddListener(registerNotificationListeners);
  */
 async function applyDisplayMode(): Promise<void> {
 	const { displayMode } = await storage.getSettings();
+	cachedDisplayMode = displayMode;
 	const sidebar = displayMode === 'sidebar';
 	await actionSetPopup(sidebar ? '' : runtimeGetURL(POPUP_PATH));
 	// Never Chrome's own open-on-click: it would swallow the click that `sidebarToggle` needs.
@@ -181,10 +191,51 @@ async function applyDisplayMode(): Promise<void> {
 
 void applyDisplayMode().catch((error) => console.error('Failed to apply display mode:', error));
 
-// Only fires while the popup is removed, i.e. in sidebar mode. The keyboard shortcut is the
-// `_execute_action` command, which the browser treats as a click: with a popup set it opens the
-// popup, without one it lands here.
+// Only fires while the popup is removed, i.e. in sidebar mode.
 actionOnClickedAddListener(sidebarToggle);
+
+/**
+ * Chrome's shortcut (`toggle-dashboard`) does what a toolbar click does, plus closing: the browser
+ * swallows the key while the popup is open, so the popup cannot do it and `_execute_action` cannot be
+ * used. Firefox keeps `_execute_action` and never reaches this.
+ */
+function toggleDashboard(windowId: number | undefined): void {
+	switch (cachedDisplayMode) {
+		case 'sidebar':
+			// Synchronous on purpose: opening a sidebar needs the shortcut's user gesture.
+			sidebarToggle(windowId);
+			return;
+		case 'fullpage':
+			// What a toolbar click does here: the popup opens and redirects to this tab.
+			void tabsCreate({ url: runtimeGetURL(DASHBOARD_URL) });
+			return;
+		case 'popup':
+			void togglePopup().catch((error) => console.error('Failed to toggle popup:', error));
+			return;
+		default:
+			// ponytail: cold worker, the mode is not cached yet. The settings read costs the gesture, so a
+			// sidebar open here may need a second press. Popup and full page do not need one.
+			void storage
+				.getSettings()
+				.then((settings) => {
+					cachedDisplayMode = settings.displayMode;
+					toggleDashboard(windowId);
+				})
+				.catch((error) => console.error('Failed to read display mode:', error));
+	}
+}
+
+async function togglePopup(): Promise<void> {
+	if (await popupIsOpen()) {
+		await runtimeSendMessage({ type: 'CLOSE_POPUP' });
+		return;
+	}
+	await actionOpenPopup();
+}
+
+commandsOnCommandAddListener((command, windowId) => {
+	if (command === TOGGLE_COMMAND) toggleDashboard(windowId);
+});
 
 async function updateBadge(count: number): Promise<void> {
 	const text = count > 0 ? String(count) : '';
@@ -305,6 +356,8 @@ const messageHandlers: Record<RuntimeMessage['type'], (message: RuntimeMessage) 
 		}
 		return { success: true };
 	},
+	// Never handled here: it is addressed to the popup. Present because the table covers every type.
+	CLOSE_POPUP: async () => ({ success: true }),
 	CLEAR_ALL: async () => {
 		await alarmsClear(ALARM_NAME);
 		await actionSetBadgeText({ text: '' });

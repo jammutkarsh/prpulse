@@ -20,6 +20,14 @@ body,
 	min-height: 100%;
 }
 
+/* The popup window sizes itself to the document. A 100% floor would pin it to the window's current
+   height, so shrinking the frame left empty space below it. */
+html:has(.popup-frame),
+html:has(.popup-frame) body,
+html:has(.popup-frame) #app {
+	min-height: 0;
+}
+
 html {
 	font-size: 16px;
 	scroll-behavior: var(--scroll-behavior);

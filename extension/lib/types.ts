@@ -200,7 +200,9 @@ export type RuntimeMessage =
 	| { type: 'GET_PRS' }
 	/** Storage is already written by the sender; this only tells the worker which keys moved. */
 	| { type: 'SETTINGS_CHANGED'; settings: Partial<Settings> }
-	| { type: 'CLEAR_ALL' };
+	| { type: 'CLEAR_ALL' }
+	/** Sent by the worker, not to it: the popup closes itself, as the shortcut asks for a toggle. */
+	| { type: 'CLOSE_POPUP' };
 
 export interface ProviderErrorDetails {
 	statusCode?: number;

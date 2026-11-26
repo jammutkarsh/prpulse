@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { ArrowLeft, ArrowRight, Kanban, Link2, Ticket } from 'lucide-svelte';
-	import RadioCard from '../../lib/components/RadioCard.svelte';
+	import { ArrowRight, Kanban, Ticket } from 'lucide-svelte';
 	import Button from '../../lib/components/Button.svelte';
-	import SectionCard from '../../lib/components/SectionCard.svelte';
+	import InfoTip from '../../lib/components/InfoTip.svelte';
+	import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
 	import { issueLinkFor } from '../../../lib/issue-tracker';
 	import type { Settings } from '../../../lib/types';
 
@@ -15,8 +15,9 @@
 		onTrackerChange?: (value: Settings['issueTracker']) => void;
 		onJiraUrlChange?: (value: string) => void;
 		onLinearWorkspaceChange?: (value: string) => void;
+		/** Only the newest section shows its Continue button. */
+		active?: boolean;
 		onNext?: VoidCallback;
-		onBack?: VoidCallback;
 	}
 
 	let {
@@ -26,8 +27,8 @@
 		onTrackerChange = () => {},
 		onJiraUrlChange = () => {},
 		onLinearWorkspaceChange = () => {},
-		onNext = () => {},
-		onBack = () => {}
+		active = true,
+		onNext = () => {}
 	}: Props = $props();
 
 	let isLinear = $derived(issueTracker === 'linear');
@@ -35,41 +36,37 @@
 	let previewUrl = $derived(issueLinkFor(sample.branch, { issueTracker, jiraBaseUrl, linearWorkspace })?.url ?? '');
 </script>
 
-<SectionCard className="p-6">
-	<div class="step-row">
-		<div class="step-icon">
-			<Link2 class="h-5 w-5" />
-		</div>
-		<div>
-			<h2 class="step-heading">Connect your issue tracker</h2>
-			<p class="desc">Map branch names to ticket links now, or skip and configure it later from settings.</p>
-		</div>
+{#snippet label(text: string, tip: string)}
+	<span class="flex items-center gap-1.5 font-medium">
+		{text}
+		<InfoTip text={tip} />
+	</span>
+{/snippet}
+
+<div class="rounded-lg border border-soft text-sm">
+	<div class="flex items-center justify-between gap-4 px-4 py-3">
+		{@render label('Tracker', 'Optional. Branch names containing a ticket id link to it. Leave the field empty to skip.')}
+		<SegmentedControl name="issueTracker" value={issueTracker} options={[{ value: 'jira', label: 'Jira', icon: Ticket }, { value: 'linear', label: 'Linear', icon: Kanban }]} onchange={(v) => onTrackerChange(v as Settings['issueTracker'])} />
 	</div>
-	<div class="space-y-4">
-		<div class="grid-2">
-			<RadioCard name="issueTracker" value="jira" currentValue={issueTracker} title="Jira" description="Jira Cloud or Data Center." iconComponent={Ticket} onchange={() => onTrackerChange('jira')} />
-			<RadioCard name="issueTracker" value="linear" currentValue={issueTracker} title="Linear" description="A Linear workspace." iconComponent={Kanban} onchange={() => onTrackerChange('linear')} />
-		</div>
+	<div class="space-y-2 border-t border-soft px-4 py-3">
 		{#if isLinear}
-			<input class="field-input" type="text" value={linearWorkspace} oninput={(e) => onLinearWorkspaceChange(e.currentTarget.value)} placeholder="acme or https://linear.app/acme" />
+			{@render label('Workspace', 'Your Linear workspace name or URL.')}
+			<input class="field-input" type="text" value={linearWorkspace} oninput={(e) => onLinearWorkspaceChange(e.currentTarget.value)} placeholder="acme or https://linear.app/acme" aria-label="Linear workspace" />
 		{:else}
-			<input class="field-input" type="url" value={jiraBaseUrl} oninput={(e) => onJiraUrlChange(e.currentTarget.value)} placeholder="https://company.atlassian.net/browse/PROJ-123" />
+			{@render label('Jira URL', 'Jira Cloud or Data Center. Paste your Jira address or any issue URL.')}
+			<input class="field-input" type="url" value={jiraBaseUrl} oninput={(e) => onJiraUrlChange(e.currentTarget.value)} placeholder="https://company.atlassian.net/browse/PROJ-123" aria-label="Jira URL" />
 		{/if}
-		<div class="rounded-lg border border-soft bg-(--bg-panel) p-4 desc">
-			<div class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-dim">Preview</div>
-			<div class="flex flex-wrap items-center gap-2">
-				<code class="rounded-lg bg-white/6 px-2 py-1 text-white">{sample.branch}</code>
-				<span>→</span>
-				{#if previewUrl}
-					<a class="link-accent" href={previewUrl} target="_blank" rel="noopener noreferrer">{sample.ticket}</a>
-				{:else}
-					<span>No {isLinear ? 'Linear workspace' : 'Jira'} configured</span>
-				{/if}
-			</div>
-		</div>
 	</div>
-	<div class="step-actions">
-		<Button variant="secondary" onclick={onBack}><ArrowLeft class="h-4 w-4" />Back</Button>
-		<Button onclick={onNext}>Continue<ArrowRight class="h-4 w-4" /></Button>
+	<div class="flex flex-wrap items-center gap-2 border-t border-soft px-4 py-3 desc">
+		<code class="rounded-lg bg-white/6 px-2 py-1 text-white">{sample.branch}</code>
+		<span>→</span>
+		{#if previewUrl}
+			<a class="link-accent" href={previewUrl} target="_blank" rel="noopener noreferrer">{sample.ticket}</a>
+		{:else}
+			<span>No {isLinear ? 'Linear workspace' : 'Jira'} configured</span>
+		{/if}
 	</div>
-</SectionCard>
+</div>
+{#if active}
+	<div class="mt-4"><Button onclick={onNext}>Continue<ArrowRight class="h-4 w-4" /></Button></div>
+{/if}

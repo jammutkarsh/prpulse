@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, tick, type ComponentType } from 'svelte';
+	import { Bell, Github, LayoutPanelLeft, Link2, MonitorSmartphone } from 'lucide-svelte';
 	import { permissionsRequest, runtimeGetURL, storageOnChangedAddListener, type StorageChangeMap } from '../../lib/extension-api';
 	import { storage } from '../../lib/storage';
 	import { DEFAULT_SETTINGS } from '../../lib/ui-config';
@@ -7,6 +8,7 @@
 	import { activeSync } from '../../lib/popup-session';
 	import { commitJiraUrl } from '../../lib/jira';
 	import { commitLinearWorkspace } from '../../lib/linear';
+	import { parseRepoPatterns } from '../../lib/repo-filter';
 	import { commitProvider, connectGithubToken } from '../../lib/github-connect';
 	import GithubStep from './steps/GithubStep.svelte';
 	import DefaultViewStep from './steps/DefaultViewStep.svelte';
@@ -14,6 +16,8 @@
 	import NotificationsStep from './steps/NotificationsStep.svelte';
 	import DisplayStep from './steps/DisplayStep.svelte';
 	import CompleteStep from './steps/CompleteStep.svelte';
+	import InfoTip from '../lib/components/InfoTip.svelte';
+	import SectionCard from '../lib/components/SectionCard.svelte';
 	import AttributionFooter from '../lib/components/AttributionFooter.svelte';
 
 	const STEP_GITHUB = 1;
@@ -22,20 +26,22 @@
 	const STEP_NOTIFICATIONS = 4;
 	const STEP_DISPLAY = 5;
 	const STEP_COMPLETE = 6;
-	type OnboardingSettings = Pick<Settings, 'pinnedTab' | 'issueTracker' | 'jiraBaseUrl' | 'linearWorkspace' | 'displayMode' | 'notificationsEnabled'>;
+	type OnboardingSettings = Pick<Settings, 'pinnedTab' | 'issueTracker' | 'jiraBaseUrl' | 'linearWorkspace' | 'displayMode' | 'notificationsEnabled' | 'groupByRepo' | 'repoFilterEnabled'>;
 	type OnboardingSessionState = {
 		currentStep?: number;
 		providerData?: StoredProviderConfig | null;
 		settings?: Partial<OnboardingSettings>;
+		repoIncludeText?: string;
+		repoExcludeText?: string;
 		token?: string;
 	};
 
-	const steps = [
-		{ id: STEP_GITHUB, label: 'GitHub' },
-		{ id: STEP_DEFAULT_VIEW, label: 'Default view' },
-		{ id: STEP_JIRA, label: 'Issues' },
-		{ id: STEP_NOTIFICATIONS, label: 'Notifications' },
-		{ id: STEP_DISPLAY, label: 'Display' },
+	const steps: { id: number; title: string; icon: ComponentType; tip: string }[] = [
+		{ id: STEP_GITHUB, title: 'GitHub', icon: Github, tip: 'Connect your account so PR Pulse can read your pull requests.' },
+		{ id: STEP_DEFAULT_VIEW, title: 'Default view', icon: LayoutPanelLeft, tip: 'How the list looks when you open it. All optional; change any of it later in Settings.' },
+		{ id: STEP_JIRA, title: 'Issue tracker', icon: Link2, tip: 'Map branch names to ticket links now, or skip and configure it later in Settings.' },
+		{ id: STEP_NOTIFICATIONS, title: 'Notifications', icon: Bell, tip: 'Get told when a PR needs you, without watching the toolbar badge. Optional.' },
+		{ id: STEP_DISPLAY, title: 'Display', icon: MonitorSmartphone, tip: 'Start compact in the popup, dock it in the sidebar, or open a full-page workspace.' },
 	];
 
 	let currentStep = $state<number>(STEP_GITHUB);
@@ -46,9 +52,14 @@
 		jiraBaseUrl: DEFAULT_SETTINGS.jiraBaseUrl,
 		linearWorkspace: DEFAULT_SETTINGS.linearWorkspace,
 		displayMode: DEFAULT_SETTINGS.displayMode,
+		groupByRepo: DEFAULT_SETTINGS.groupByRepo,
+		repoFilterEnabled: DEFAULT_SETTINGS.repoFilterEnabled,
 		// Left unanswered on purpose: skipping the step keeps `null`, which is what makes the popup ask later.
 		notificationsEnabled: DEFAULT_SETTINGS.notificationsEnabled,
 	});
+	// Raw text, parsed on finish: an invalid line is skipped there rather than blocking setup.
+	let repoIncludeText = $state('');
+	let repoExcludeText = $state('');
 	let token = $state('');
 	let tokenVisible = $state(false);
 	let testingConnection = $state(false);
@@ -69,6 +80,8 @@
 				const state = JSON.parse(saved) as OnboardingSessionState;
 				if (state.settings) settings = { ...settings, ...state.settings };
 				if (state.token) token = state.token;
+				repoIncludeText = state.repoIncludeText ?? '';
+				repoExcludeText = state.repoExcludeText ?? '';
 				if (state.providerData) providerData = state.providerData;
 				if (state.currentStep) currentStep = Math.min(STEP_COMPLETE, Math.max(STEP_GITHUB, state.currentStep));
 			} catch {
@@ -80,7 +93,7 @@
 
 	$effect(() => {
 		if (onboardingStateReady) {
-			sessionStorage.setItem('prPulseOnboarding', JSON.stringify({ currentStep, providerData, settings, token }));
+			sessionStorage.setItem('prPulseOnboarding', JSON.stringify({ currentStep, providerData, settings, token, repoIncludeText, repoExcludeText }));
 		}
 	});
 
@@ -101,7 +114,7 @@
 		}
 	}
 
-	function nextStep() {
+	async function nextStep() {
 		if (currentStep === STEP_JIRA) {
 			// Only the selected tracker's field is on screen, so only that one can block the step.
 			if (settings.issueTracker === 'linear') {
@@ -123,11 +136,8 @@
 
 		errorMessage = '';
 		currentStep = Math.min(STEP_DISPLAY, currentStep + 1);
-	}
-
-	function prevStep() {
-		errorMessage = '';
-		currentStep = Math.max(STEP_GITHUB, currentStep - 1);
+		await tick();
+		document.getElementById(`step-${currentStep}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 	}
 
 	/**
@@ -157,6 +167,8 @@
 			// Settings first: the worker reads them the moment the provider commit wakes it.
 			await storage.setSettings({
 				...settings,
+				repoInclude: parseRepoPatterns(repoIncludeText).patterns,
+				repoExclude: parseRepoPatterns(repoExcludeText).patterns,
 				jiraBaseUrl: commitJiraUrl(settings.jiraBaseUrl) ?? '',
 				linearWorkspace: commitLinearWorkspace(settings.linearWorkspace) ?? '',
 			});
@@ -204,104 +216,106 @@
 	}
 </script>
 
+{#snippet head(Icon: ComponentType, title: string, tip: string)}
+	<div class="mb-3 flex items-center gap-3">
+		<div class="step-icon !p-2"><Icon class="h-4 w-4" /></div>
+		<h2 class="card-title">{title}</h2>
+		<InfoTip text={tip} />
+	</div>
+{/snippet}
+
 <div class="page-screen">
-	{#if !onboardingStateReady}
-		<div class="page-wrap">
-			<div class="surface-card-padded">
-				<div class="space-y-2">
-					<div class="section-title">Setup</div>
-					<h1 class="text-3xl font-semibold text-white">Configure PR Pulse</h1>
-					<p class="body-text">Restoring your onboarding progress...</p>
-				</div>
-			</div>
-		</div>
-	{:else}
 	<div class="page-wrap">
 		<div class="surface-card-padded">
-			<div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-				<div class="max-w-xl space-y-2">
-					<div class="section-title">Setup</div>
-					<h1 class="text-3xl font-semibold text-white">Configure PR Pulse</h1>
-					<p class="body-text">Connect GitHub, choose your default view, decide how you want to be notified, and optionally enable Jira or Linear ticket links.</p>
-				</div>
-				<div class="rounded-lg border border-soft bg-(--bg-muted) px-4 py-3 desc">
-					{currentStep === STEP_COMPLETE ? 'Setup complete' : `Step ${Math.min(currentStep, STEP_DISPLAY)} of ${STEP_DISPLAY}`}
-				</div>
+			<div class="max-w-xl space-y-2">
+				<div class="section-title">Setup</div>
+				<h1 class="text-3xl font-semibold text-white">Configure PR Pulse</h1>
+				{#if !onboardingStateReady}
+					<p class="body-text">Restoring your onboarding progress...</p>
+				{/if}
 			</div>
-
-			{#if currentStep !== STEP_COMPLETE}
-				<div class="mt-6 grid gap-3 sm:grid-cols-5">
-					{#each steps as step (step.id)}
-						<div class={`rounded-lg border px-4 py-3 text-sm transition ${currentStep === step.id ? 'border-(--accent) bg-(--accent-muted) text-white' : currentStep > step.id ? 'border-(--accent-border) bg-[rgba(55,148,255,0.08)] text-soft' : 'border-soft bg-(--bg-panel) text-dim'}`}>
-							<div class="text-[11px] font-semibold uppercase tracking-[0.18em]">{step.id}</div>
-							<div class="mt-1 font-medium">{step.label}</div>
-						</div>
-					{/each}
-				</div>
-			{/if}
 		</div>
 
-		{#if errorMessage}
-			<div class="danger-surface rounded-lg border px-4 py-3 text-sm text-(--danger)">
-				{errorMessage}
-			</div>
-		{/if}
-
-		{#if currentStep === STEP_GITHUB}
-			<GithubStep
-				{token}
-				{tokenVisible}
-				{testingConnection}
-				{providerData}
-				onTestConnection={testConnection}
-				onNext={nextStep}
-				onTokenChange={(val) => token = val}
-				onToggleTokenVisible={() => tokenVisible = !tokenVisible}
-			/>
-		{:else if currentStep === STEP_DEFAULT_VIEW}
-			<DefaultViewStep
-				pinnedTab={settings.pinnedTab}
-				onPinnedTabChange={(val) => settings = { ...settings, pinnedTab: val }}
-				onNext={nextStep}
-				onBack={prevStep}
-			/>
-		{:else if currentStep === STEP_JIRA}
-			<JiraStep
-				issueTracker={settings.issueTracker}
-				jiraBaseUrl={settings.jiraBaseUrl}
-				linearWorkspace={settings.linearWorkspace}
-				onTrackerChange={(issueTracker) => { errorMessage = ''; settings = { ...settings, issueTracker }; }}
-				onJiraUrlChange={updateJiraUrl}
-				onLinearWorkspaceChange={(linearWorkspace) => { settings = { ...settings, linearWorkspace }; }}
-				onNext={nextStep}
-				onBack={prevStep}
-			/>
-		{:else if currentStep === STEP_NOTIFICATIONS}
-			<NotificationsStep
-				notificationsEnabled={settings.notificationsEnabled}
-				onNotificationsChange={updateNotifications}
-				onNext={nextStep}
-				onBack={prevStep}
-			/>
-		{:else if currentStep === STEP_DISPLAY}
-			<DisplayStep
-				displayMode={settings.displayMode}
-				{completingSetup}
-				onDisplayModeChange={(val) => settings = { ...settings, displayMode: val }}
-				onComplete={completeSetup}
-				onBack={prevStep}
-			/>
-		{:else}
-			<CompleteStep
-				displayMode={settings.displayMode}
-				{syncedPrCount}
-				{syncing}
-				{syncComplete}
-				onClose={closeSetup}
-			/>
+		{#if onboardingStateReady}
+			{#if currentStep === STEP_COMPLETE}
+				<CompleteStep
+					displayMode={settings.displayMode}
+					{syncedPrCount}
+					{syncing}
+					{syncComplete}
+					onClose={closeSetup}
+				/>
+			{:else}
+				<SectionCard>
+					{#each steps as step (step.id)}
+						{#if currentStep >= step.id}
+							{#if step.id > STEP_GITHUB}<hr class="my-5 border-soft" />{/if}
+							<div id={`step-${step.id}`} class="scroll-mt-4">
+								{@render head(step.icon, step.title, step.tip)}
+								{#if step.id === STEP_GITHUB}
+									<GithubStep
+										{token}
+										{tokenVisible}
+										{testingConnection}
+										{providerData}
+										active={currentStep === step.id}
+										onTestConnection={testConnection}
+										onNext={nextStep}
+										onTokenChange={(val) => token = val}
+										onToggleTokenVisible={() => tokenVisible = !tokenVisible}
+									/>
+								{:else if step.id === STEP_DEFAULT_VIEW}
+									<DefaultViewStep
+										pinnedTab={settings.pinnedTab}
+										onPinnedTabChange={(val) => settings = { ...settings, pinnedTab: val }}
+										groupByRepo={settings.groupByRepo}
+										onGroupByRepoChange={(groupByRepo) => settings = { ...settings, groupByRepo }}
+										repoFilterEnabled={settings.repoFilterEnabled}
+										onRepoFilterEnabledChange={(repoFilterEnabled) => settings = { ...settings, repoFilterEnabled }}
+										{repoIncludeText}
+										{repoExcludeText}
+										onRepoFiltersChange={(include, exclude) => { repoIncludeText = include; repoExcludeText = exclude; }}
+										active={currentStep === step.id}
+										onNext={nextStep}
+									/>
+								{:else if step.id === STEP_JIRA}
+									<JiraStep
+										issueTracker={settings.issueTracker}
+										jiraBaseUrl={settings.jiraBaseUrl}
+										linearWorkspace={settings.linearWorkspace}
+										onTrackerChange={(issueTracker) => { errorMessage = ''; settings = { ...settings, issueTracker }; }}
+										onJiraUrlChange={updateJiraUrl}
+										onLinearWorkspaceChange={(linearWorkspace) => { settings = { ...settings, linearWorkspace }; }}
+										active={currentStep === step.id}
+										onNext={nextStep}
+									/>
+								{:else if step.id === STEP_NOTIFICATIONS}
+									<NotificationsStep
+										notificationsEnabled={settings.notificationsEnabled}
+										onNotificationsChange={updateNotifications}
+										active={currentStep === step.id}
+										onNext={nextStep}
+									/>
+								{:else}
+									<DisplayStep
+										displayMode={settings.displayMode}
+										{completingSetup}
+										onDisplayModeChange={(val) => settings = { ...settings, displayMode: val }}
+										onComplete={completeSetup}
+									/>
+								{/if}
+							</div>
+						{/if}
+					{/each}
+					{#if errorMessage}
+						<div class="danger-surface mt-4 rounded-lg border px-4 py-3 text-sm text-(--danger)">
+							{errorMessage}
+						</div>
+					{/if}
+				</SectionCard>
+			{/if}
 		{/if}
 
 		<AttributionFooter />
 	</div>
-	{/if}
 </div>

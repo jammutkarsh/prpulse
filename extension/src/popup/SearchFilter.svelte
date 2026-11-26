@@ -45,6 +45,8 @@
             panelPad: 'px-2 py-1.5',
             sectionSpace: 'space-y-1',
             headerPad: 'px-2 py-1 text-[13px]',
+            // Header buttons inherit font-size (app.css), so toggle rows skip the text size to match.
+            rowPad: 'px-2 py-1',
             contentPad: 'px-2 py-1',
             labelPad: 'px-1.5 py-0.5 text-[13px] gap-2',
             rowGap: 'gap-1',
@@ -58,6 +60,7 @@
             panelPad: 'px-4 py-3',
             sectionSpace: 'space-y-2',
             headerPad: 'px-3 py-2 text-sm',
+            rowPad: 'px-3 py-2',
             contentPad: 'px-3 py-2',
             labelPad: 'px-2 py-1.5 text-sm gap-3',
             rowGap: 'gap-2',
@@ -107,9 +110,6 @@
         authors: false,
         owners: false,
         repos: false,
-        drafts: false,
-        reviewStatus: false,
-        conflicts: false,
     });
 
     let searchInput = $state<HTMLInputElement | null>(null);
@@ -351,15 +351,6 @@
     let hasActiveFilters = $derived(activeFilterCount > 0);
     let layout = $derived(fullpageMode ? LAYOUT.full : LAYOUT.compact);
     const filterButtonLabel = 'Toggle filters';
-    let draftFilterLabel = $derived(
-        activeFilters.drafts === 'only' ? 'Only drafts' :
-        activeFilters.drafts === 'include' ? 'Included' :
-        'Excluded'
-    );
-    let reviewStatusLabel = $derived(
-        activeFilters.showReviewed ? 'All' : 'Pending only'
-    );
-    let conflictsLabel = $derived(activeFilters.conflictsOnly ? 'Only conflicts' : 'All');
     let selectedFilterChips = $derived<FilterChip[]>([
         ...(activeFilters.authors.length > 1
             ? activeFilters.authors.map((authorLogin) => ({
@@ -413,9 +404,6 @@
                 authors: false,
                 owners: false,
                 repos: false,
-                drafts: false,
-                reviewStatus: false,
-                conflicts: false,
             };
         }
     });
@@ -444,6 +432,17 @@
             >Clear</span>
         {/if}
     </button>
+{/snippet}
+
+{#snippet toggleRow(title: string, choices: [string, boolean][], onSelect: (index: number) => void)}
+    <div class={`filter-section flex items-center justify-between gap-2 ${layout.rowPad}`}>
+        <span class="min-w-0 truncate font-medium text-white">{title}</span>
+        <div class="segmented" role="group" aria-label={title}>
+            {#each choices as [label, pressed], index (label)}
+                <button type="button" class="segmented-option" aria-pressed={pressed} onclick={() => onSelect(index)}>{label}</button>
+            {/each}
+        </div>
+    </div>
 {/snippet}
 
 {#if isSearchOpen}
@@ -515,68 +514,13 @@
 
             <div class={`overflow-y-auto rounded-xl border border-soft bg-(--bg-panel-strong) ${layout.panelPad} shadow-lg`} style:max-height={layout.filterPanelMaxHeight}>
                 <div class={layout.sectionSpace}>
-                    <div class="filter-section">
-                        {@render sectionHeader('drafts', 'Draft PRs', draftFilterLabel, null)}
-
-                        {#if expandedSections.drafts}
-                            <div class={`filter-section-body ${layout.contentPad}`}>
-                        <div class={`flex flex-col ${layout.sectionGap}`}>
-                            <label class={`filter-label ${layout.labelPad}`}>
-                                <input type="radio" name="draft_filter" value="exclude" class="h-3.5 w-3.5 border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" bind:group={activeFilters.drafts} />
-                                <span class="filter-label-text">Don't show drafts</span>
-                            </label>
-                            <label class={`filter-label ${layout.labelPad}`}>
-                                <input type="radio" name="draft_filter" value="include" class="h-3.5 w-3.5 border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" bind:group={activeFilters.drafts} />
-                                <span class="filter-label-text">Include drafts</span>
-                            </label>
-                            <label class={`filter-label ${layout.labelPad}`}>
-                                <input type="radio" name="draft_filter" value="only" class="h-3.5 w-3.5 border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" bind:group={activeFilters.drafts} />
-                                <span class="min-w-0 flex-1 text-soft">Only show drafts</span>
-                            </label>
-                        </div>
-                            </div>
-                        {/if}
-                    </div>
+                    {@render toggleRow('Draft PRs', [['Hide', activeFilters.drafts === 'exclude'], ['Include', activeFilters.drafts === 'include'], ['Only', activeFilters.drafts === 'only']], (i) => { activeFilters = { ...activeFilters, drafts: (['exclude', 'include', 'only'] as const)[i] }; })}
 
                     {#if isToReviewTab}
-                        <div class="filter-section">
-                            {@render sectionHeader('reviewStatus', 'Review Status', reviewStatusLabel, null)}
-
-                            {#if expandedSections.reviewStatus}
-                                <div class={`filter-section-body ${layout.contentPad}`}>
-                            <div class={`flex flex-col ${layout.sectionGap}`}>
-                                <label class={`filter-label ${layout.labelPad}`}>
-                                    <input type="radio" name="review_filter" value="pending" checked={!activeFilters.showReviewed} onchange={() => { activeFilters = { ...activeFilters, showReviewed: false }; }} class="h-3.5 w-3.5 border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" />
-                                    <span class="filter-label-text">Only pending review</span>
-                                </label>
-                                <label class={`filter-label ${layout.labelPad}`}>
-                                    <input type="radio" name="review_filter" value="all" checked={activeFilters.showReviewed} onchange={() => { activeFilters = { ...activeFilters, showReviewed: true }; }} class="h-3.5 w-3.5 border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" />
-                                    <span class="min-w-0 flex-1 text-soft">Show reviewed PRs</span>
-                                </label>
-                            </div>
-                                </div>
-                            {/if}
-                        </div>
+                        {@render toggleRow('Review status', [['Pending only', !activeFilters.showReviewed], ['All', activeFilters.showReviewed]], (i) => { activeFilters = { ...activeFilters, showReviewed: i === 1 }; })}
                     {/if}
 
-                    <div class="filter-section">
-                        {@render sectionHeader('conflicts', 'Merge Conflicts', conflictsLabel, null)}
-
-                        {#if expandedSections.conflicts}
-                            <div class={`filter-section-body ${layout.contentPad}`}>
-                        <div class={`flex flex-col ${layout.sectionGap}`}>
-                            <label class={`filter-label ${layout.labelPad}`}>
-                                <input type="radio" name="conflict_filter" value={false} bind:group={activeFilters.conflictsOnly} class="h-3.5 w-3.5 border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" />
-                                <span class="filter-label-text">All PRs</span>
-                            </label>
-                            <label class={`filter-label ${layout.labelPad}`}>
-                                <input type="radio" name="conflict_filter" value={true} bind:group={activeFilters.conflictsOnly} class="h-3.5 w-3.5 border-soft bg-black/40 text-(--accent) focus:ring-(--accent)" />
-                                <span class="min-w-0 flex-1 text-soft">Only PRs with conflicts</span>
-                            </label>
-                        </div>
-                            </div>
-                        {/if}
-                    </div>
+                    {@render toggleRow('Merge conflicts', [['All', !activeFilters.conflictsOnly], ['Only conflicts', activeFilters.conflictsOnly]], (i) => { activeFilters = { ...activeFilters, conflictsOnly: i === 1 }; })}
 
                     {#each filterSections as filterSection (filterSection.key)}
                         {#if filterSection.show}

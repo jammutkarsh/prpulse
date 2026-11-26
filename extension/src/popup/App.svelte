@@ -12,9 +12,13 @@
 	import {
 		runtimeGetURL,
 		storageOnChangedAddListener,
+		runtimeOnMessageAddListener,
 		runtimeSendMessage,
 		tabsCreate,
 		permissionsRequest,
+		sidebarClose,
+		SETTINGS_PATH,
+		SIDEBAR_SETTINGS_PATH,
 		type StorageChangeMap,
 		type Unsubscribe,
 	} from '../../lib/extension-api';
@@ -81,6 +85,14 @@
 	}
 
 	onMount(() => {
+		// The worker asks the popup to close when the shortcut is pressed again; the browser does not
+		// deliver that keypress to the page. Only the toolbar popup obeys: not the sidebar or full page.
+		runtimeOnMessageAddListener((message) => {
+			const params = new URLSearchParams(window.location.search);
+			if ((message as { type?: string }).type === 'CLOSE_POPUP' && !params.has('sidebar') && !params.has('fullpage')) {
+				window.close();
+			}
+		});
 		unsubscribeSession = session.subscribe((next) => {
 			popup = next;
 		});
@@ -170,8 +182,9 @@
 	}
 
 	function openSettings() {
-		const target = runtimeGetURL('settings/settings.html');
-		if (isFullpageMode) {
+		const target = runtimeGetURL(isSidebarMode ? SIDEBAR_SETTINGS_PATH : SETTINGS_PATH);
+		// The sidebar navigates itself; Back on the settings page leads here again.
+		if (isFullpageMode || isSidebarMode) {
 			window.location.href = target;
 			return;
 		}
@@ -181,6 +194,8 @@
 
 	function openFullscreen() {
 		void tabsCreate({ url: runtimeGetURL('popup/popup.html?fullpage=1') });
+		// Sidebar -> full page is a move, not a copy.
+		if (isSidebarMode) void sidebarClose();
 	}
 
 	async function enableNotifications() {
@@ -342,7 +357,9 @@
 					hasRepoRules={hasRepoRules(settings)}
 					repoFilterEnabled={settings.repoFilterEnabled}
 					hiddenCount={repoHiddenCount}
+					groupByRepo={settings.groupByRepo}
 					onRepoFilterChange={(repoFilterEnabled) => void session.updateSettings({ repoFilterEnabled })}
+					onGroupByRepoChange={(groupByRepo) => void session.updateSettings({ groupByRepo })}
 					onSortChange={(sortBy) => void session.updateSettings({ sortBy })}
 				/>
 			{/if}

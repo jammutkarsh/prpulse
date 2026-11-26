@@ -437,12 +437,6 @@
 		color: white;
 	}
 
-	.step-heading {
-		font-size: 1.25rem;
-		font-weight: 600;
-		color: white;
-	}
-
 	.body-text {
 		font-size: 0.875rem;
 		line-height: 1.2rem;
@@ -505,14 +499,6 @@
 		color: white;
 	}
 
-	.accent-box {
-		border-radius: 0.5rem;
-		border: 1px solid var(--accent-border);
-		background: var(--accent-muted);
-		padding: 0.75rem;
-		color: var(--accent);
-	}
-
 	.icon-soft {
 		height: 0.875rem;
 		width: 0.875rem;
@@ -529,18 +515,4 @@
 	}
 
 	/* ── Onboarding ── */
-
-	.step-row {
-		margin-bottom: 1.25rem;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.step-actions {
-		margin-top: 1.5rem;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.75rem;
-	}
 }

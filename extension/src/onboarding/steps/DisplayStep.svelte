@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { ArrowLeft, Expand, MonitorSmartphone, PanelRight, Sparkles } from 'lucide-svelte';
+	import { Expand, MonitorSmartphone, PanelRight, Sparkles } from 'lucide-svelte';
 	import Button from '../../lib/components/Button.svelte';
-	import RadioCard from '../../lib/components/RadioCard.svelte';
-	import SectionCard from '../../lib/components/SectionCard.svelte';
+	import InfoTip from '../../lib/components/InfoTip.svelte';
+	import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
 	import type { Settings } from '../../../lib/types';
 
 	type VoidCallback = () => void;
@@ -12,38 +12,28 @@
 		completingSetup?: boolean;
 		onDisplayModeChange?: (value: Settings['displayMode']) => void;
 		onComplete?: VoidCallback;
-		onBack?: VoidCallback;
 	}
 
 	let {
 		displayMode = 'popup',
 		completingSetup = false,
 		onDisplayModeChange = () => {},
-		onComplete = () => {},
-		onBack = () => {}
+		onComplete = () => {}
 	}: Props = $props();
 </script>
 
-<SectionCard className="p-6">
-	<div class="step-row">
-		<div class="step-icon">
-			<MonitorSmartphone class="h-5 w-5" />
-		</div>
-		<div>
-			<h2 class="step-heading">Choose a display mode</h2>
-			<p class="desc">Start compact in the popup, dock it in the sidebar, or jump directly into a full-page workspace.</p>
-		</div>
+<div class="rounded-lg border border-soft text-sm">
+	<div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
+		<span class="flex items-center gap-1.5 font-medium">
+			Open as
+			<InfoTip text="What the toolbar button opens. Popup is compact, Full page uses a tab, Sidebar docks beside the page at full height and the button toggles it." />
+		</span>
+		<SegmentedControl name="displayMode" value={displayMode} options={[{ value: 'popup', label: 'Popup', icon: MonitorSmartphone }, { value: 'fullpage', label: 'Full page', icon: Expand }, { value: 'sidebar', label: 'Sidebar', icon: PanelRight }]} onchange={(v) => onDisplayModeChange(v as Settings['displayMode'])} />
 	</div>
-	<div class="grid gap-3 md:grid-cols-3">
-		<RadioCard name="displayMode" value="popup" currentValue={displayMode} title="Popup" description="A compact glanceable interface from the toolbar for quick daily use." iconComponent={MonitorSmartphone} onchange={onDisplayModeChange} />
-		<RadioCard name="displayMode" value="fullpage" currentValue={displayMode} title="Full page" description="A broader canvas better suited for future filters, search, and richer organization." iconComponent={Expand} onchange={onDisplayModeChange} />
-		<RadioCard name="displayMode" value="sidebar" currentValue={displayMode} title="Sidebar" description="Docked beside the page at full window height, open while you browse." iconComponent={PanelRight} onchange={onDisplayModeChange} />
-	</div>
-	<div class="step-actions">
-		<Button variant="secondary" onclick={onBack}><ArrowLeft class="h-4 w-4" />Back</Button>
-		<Button onclick={onComplete} disabled={completingSetup}>
-			{completingSetup ? 'Finishing setup...' : 'Complete setup'}
-			<Sparkles class="h-4 w-4" />
-		</Button>
-	</div>
-</SectionCard>
+</div>
+<div class="mt-4">
+	<Button onclick={onComplete} disabled={completingSetup}>
+		{completingSetup ? 'Finishing setup...' : 'Complete setup'}
+		<Sparkles class="h-4 w-4" />
+	</Button>
+</div>

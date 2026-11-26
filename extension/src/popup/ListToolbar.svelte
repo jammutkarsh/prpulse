@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { PR_SORT_OPTIONS, type PrSort } from '../../lib/pr-view';
 
-	// The sort, and the switch for the repository lists. Grouping is a standing layout choice and lives in settings.
+	// The list view controls: the repository-list switch, grouping and sort.
 
 	interface Props {
 		sortBy?: PrSort;
@@ -10,7 +10,9 @@
 		repoFilterEnabled?: boolean;
 		/** PRs in this tab the repository lists are currently hiding. */
 		hiddenCount?: number;
+		groupByRepo?: boolean;
 		onRepoFilterChange?: (value: boolean) => void;
+		onGroupByRepoChange?: (value: boolean) => void;
 		onSortChange?: (value: PrSort) => void;
 	}
 
@@ -19,7 +21,9 @@
 		hasRepoRules = false,
 		repoFilterEnabled = true,
 		hiddenCount = 0,
+		groupByRepo = false,
 		onRepoFilterChange = () => {},
+		onGroupByRepoChange = () => {},
 		onSortChange = () => {},
 	}: Props = $props();
 </script>
@@ -37,7 +41,15 @@
 		</label>
 	{/if}
 
-	<label class="ml-auto flex items-center gap-1.5">
+	<div class="ml-auto flex items-center gap-1.5">
+		<span>View</span>
+		<div class="segmented" role="group" aria-label="List view">
+			<button type="button" class="segmented-option" aria-pressed={!groupByRepo} onclick={() => onGroupByRepoChange(false)}>List</button>
+			<button type="button" class="segmented-option" aria-pressed={groupByRepo} onclick={() => onGroupByRepoChange(true)}>By repo</button>
+		</div>
+	</div>
+
+	<label class="flex items-center gap-1.5">
 		<span>Sort</span>
 		<select
 			class="cursor-pointer rounded border border-soft bg-(--bg-panel-strong) px-1.5 py-0.5 text-xs text-white outline-none focus:border-(--accent)"

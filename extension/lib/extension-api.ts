@@ -66,7 +66,9 @@ export function tabsCreate(createProperties: browser.Tabs.CreateCreateProperties
 	return extensionBrowser.tabs.create(createProperties);
 }
 
-export { POPUP_PATH, SIDEBAR_PATH } from './dashboard-paths';
+import { TOGGLE_COMMAND } from './dashboard-paths';
+
+export { POPUP_PATH, SIDEBAR_PATH, SETTINGS_PATH, SIDEBAR_SETTINGS_PATH, TOGGLE_COMMAND } from './dashboard-paths';
 
 /** An empty string removes the popup, which is what makes `action.onClicked` fire instead. */
 export function actionSetPopup(popup: string): Promise<void> {
@@ -76,14 +78,24 @@ export function actionSetPopup(popup: string): Promise<void> {
 /**
  * Deliberately not wrapped like the other listeners: opening a sidebar is only allowed inside the
  * click's user gesture, so the listener has to run synchronously with nothing awaited in front of it.
- * The keyboard shortcut (`_execute_action`) arrives here too, as if the button had been clicked.
+ * Firefox's keyboard shortcut (`_execute_action`) arrives here too, as if the button had been clicked.
  */
 export function actionOnClickedAddListener(listener: (windowId: number | undefined) => void): void {
 	extensionBrowser.action.onClicked.addListener((tab) => listener(tab?.windowId));
 }
 
+/**
+ * Not wrapped, for the same reason as `actionOnClickedAddListener`: the sidebar must open inside the
+ * shortcut's user gesture. Only Chrome's `toggle-dashboard` arrives here; Firefox's `_execute_action`
+ * is routed as a toolbar click instead.
+ */
+export function commandsOnCommandAddListener(listener: (command: string, windowId: number | undefined) => void): void {
+	extensionBrowser.commands.onCommand.addListener((command, tab) => listener(command, tab?.windowId));
+}
+
 /** The parts of Chrome's API used here that the polyfill's types do not cover. */
 interface ChromeSidePanelApi {
+	action?: { openPopup(): Promise<void> };
 	sidePanel?: {
 		setPanelBehavior(behavior: { openPanelOnActionClick: boolean }): Promise<void>;
 		open(options: { windowId: number }): Promise<void>;
@@ -97,6 +109,17 @@ interface ChromeSidePanelApi {
 
 function chromeApi(): ChromeSidePanelApi | undefined {
 	return (globalThis as { chrome?: ChromeSidePanelApi }).chrome;
+}
+
+/** Whether Chrome is showing the toolbar popup right now. */
+export async function popupIsOpen(): Promise<boolean> {
+	const contexts = (await chromeApi()?.runtime?.getContexts({ contextTypes: ['POPUP'] })) ?? [];
+	return contexts.length > 0;
+}
+
+/** Chrome 127+. Needs no gesture, but the popup must be set, which is the case outside sidebar mode. */
+export async function actionOpenPopup(): Promise<void> {
+	await chromeApi()?.action?.openPopup();
 }
 
 /**
@@ -132,6 +155,30 @@ export function sidebarToggle(windowId: number | undefined): void {
 }
 
 /**
+ * Closes the sidebar this page is running in. Called from a click in the panel itself. Firefox has
+ * `sidebarAction.close`; Chrome's `sidePanel.close` is 141+, so older versions fall back to closing
+ * the page, which Chrome also treats as closing the panel.
+ */
+export async function sidebarClose(): Promise<void> {
+	try {
+		const sidebarAction = (extensionBrowser as unknown as { sidebarAction?: { close(): Promise<void> } }).sidebarAction;
+		if (sidebarAction) {
+			await sidebarAction.close();
+			return;
+		}
+		const { id: windowId } = await extensionBrowser.windows.getCurrent();
+		const close = chromeApi()?.sidePanel?.close;
+		if (close && windowId !== undefined) {
+			await close({ windowId });
+			return;
+		}
+	} catch (error) {
+		logExtensionApiError('sidebarClose', error);
+	}
+	window.close();
+}
+
+/**
  * Chrome can open the side panel on toolbar clicks by itself, but then the click never reaches the
  * extension. It is kept switched off so clicks and the shortcut both go through `sidebarToggle`.
  * Absent in Firefox, and outside the polyfill, hence the raw `chrome` global.
@@ -140,17 +187,27 @@ export async function sidePanelSetOpenOnActionClick(open: boolean): Promise<void
 	await chromeApi()?.sidePanel?.setPanelBehavior({ openPanelOnActionClick: open });
 }
 
-/** Where each browser lets the user rebind an extension's shortcuts. Neither page can be linked to. */
+/** Where each browser lets the user rebind an extension's shortcuts. */
 export const SHORTCUTS_PAGE_HINT =
 	__BROWSER_TARGET__ === 'firefox'
 		? 'about:addons, then the gear menu, then Manage Extension Shortcuts'
 		: 'chrome://extensions/shortcuts';
 
-/** The key currently bound to the toolbar button, or an empty string when the user or a clash left it unset. */
+/** Opens the browser's shortcut settings: `commands.openShortcutSettings` on Firefox (137+), a tab on Chrome. */
+export function openShortcutSettings(): Promise<unknown> {
+	if (__BROWSER_TARGET__ === 'firefox') {
+		return (extensionBrowser.commands as unknown as { openShortcutSettings(): Promise<void> }).openShortcutSettings();
+	}
+	return tabsCreate({ url: SHORTCUTS_PAGE_HINT });
+}
+
+/** The key currently bound to the dashboard, or an empty string when the user or a clash left it unset. */
 export async function actionShortcut(): Promise<string> {
 	try {
 		const commands = await extensionBrowser.commands.getAll();
-		return commands.find((command) => command.name === '_execute_action')?.shortcut || '';
+		// Firefox keeps the toolbar button's own command; Chrome's toggle is a custom one.
+		const name = __BROWSER_TARGET__ === 'firefox' ? '_execute_action' : TOGGLE_COMMAND;
+		return commands.find((command) => command.name === name)?.shortcut || '';
 	} catch (error) {
 		logExtensionApiError('commands.getAll', error);
 		return '';
@@ -238,10 +295,6 @@ export function notificationsOnClickedAddListener(listener: (notificationId: str
 
 export function notificationsOnButtonClickedAddListener(listener: (notificationId: string, buttonIndex: number) => void): void {
 	extensionBrowser.notifications?.onButtonClicked?.addListener(wrapListener('notifications.onButtonClicked', listener));
-}
-
-export function permissionsContains(permissions: OptionalPermission[]): Promise<boolean> {
-	return extensionBrowser.permissions.contains({ permissions });
 }
 
 /**

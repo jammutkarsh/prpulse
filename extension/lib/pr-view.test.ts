@@ -320,8 +320,8 @@ function testBadgeHonoursRepoLists(): void {
 	const rules = { repoInclude: [], repoExclude: ['globex/*'] };
 
 	assert.equal(badgeCount(data, base, createDefaultFiltersByTab()), 4);
-	// A missing switch means the default, which is on.
-	assert.equal(badgeCount(data, { ...base, ...rules }, createDefaultFiltersByTab()), 3);
+	// A missing switch means the default, which is off.
+	assert.equal(badgeCount(data, { ...base, ...rules }, createDefaultFiltersByTab()), 4);
 	assert.equal(badgeCount(data, { ...base, ...rules, repoFilterEnabled: true }, createDefaultFiltersByTab()), 3);
 	// Unticking the popup's checkbox brings the hidden repositories back into the count.
 	assert.equal(badgeCount(data, { ...base, ...rules, repoFilterEnabled: false }, createDefaultFiltersByTab()), 4);
